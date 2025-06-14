@@ -1,0 +1,597 @@
+#!/bin/bash
+
+
+check_and_deploy_dependencies(){
+    
+    
+    # Function arguments
+    local tar_file="$1"
+    local remote_user="$2"
+    local remote_host="$3"
+    local remote_dir="$4"
+    local rvm_dir="/rvm"
+    
+    local hostname_out="$5"
+    
+    if [ -z "$tar_file" ] || [ -z "$remote_user" ] || [ -z "$remote_host" ] || [ -z "$remote_dir" ]; then
+        echo "Usage: check_and_deploy_dependencies <tar_file> <remote_user> <remote_host> <remote_dir>"
+        return 1
+    fi
+    
+    if [[ "$remote_host" =~ "$hostname_out" ]]; then
+        
+        # Check if folder exists on remote host
+        if [ -d $remote_dir ]; then
+            echo "Folder $remote_dir already exists on $remote_host"
+        else
+            echo "Folder $remote_dir not found on $remote_host."
+            
+            mkdir $remote_dir; chmod 777 -R $remote_dir
+            
+            echo "Created test cases directory."
+        fi
+        
+    else
+        
+        # Check if folder exists on remote host
+        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "[ -d $rvm_dir ]"
+        
+        
+        # $? stores the exit code of the previous command
+        if [ $? -eq 0 ]; then
+            echo "Folder $rvm_dir already exists on $remote_host"
+        else
+            echo "Folder $rvm_dir not found on $remote_host. Moving it"
+            
+            # Transfer the tar file using scp
+            scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "/tmp/$tar_file" "$remote_user@$remote_host:/tmp/"
+            # Extract the tar file on the remote host
+            ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "tar -xvf /tmp/$tar_file -C /"
+            
+            echo "Transfer and extraction completed."
+        fi
+        
+        # Check if testcases folder exists on remote host
+        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "[ -d $remote_dir ]"
+        
+        
+        # $? stores the exit code of the previous command
+        if [ $? -eq 0 ]; then
+            echo "Folder $remote_dir already exists on $remote_host"
+        else
+            echo "Folder $remote_dir not found on $remote_host."
+            
+            ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "mkdir $remote_dir; chmod 777 -R $remote_dir; cd $remote_dir; source /rvm/.rvm/scripts/rvm; rvm use ruby-2.6.6; cucumber --init; echo \"require 'aruba/cucumber' \" >> $remote_dir/features/support/env.rb"
+            
+            echo "Created test cases directory."
+        fi
+        
+    fi
+    
+    
+    
+}
+
+clean_up_remote(){
+    
+    local remote_user="$1"
+    local remote_host="$2"
+    local remote_dir="$3"
+    local rvm_dir="/rvm"
+    local hostname_out="$4"
+    
+    if [[ "$remote_host" =~ "$hostname_out" ]]; then
+        
+        #if [ -d $remote_dir ]; then
+        #rm -rf $remote_dir
+        
+        #if [ -d $rvm_dir]; then
+        #rm -rf $rvm_dir
+        #echo "The rvm cleaned up $rvm_dir"
+        #fi
+        echo "Admin Chamber 0 Automation Setup will not be removed."
+        
+        #fi
+        
+    else
+        
+        # Check if folder exists on remote host
+        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "[ -d $rvm_dir ]"
+        
+        if [ $? -eq 0 ]; then
+            ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "rm -rf $rvm_dir"
+            echo "The rvm cleaned up $rvm_dir cleaned up on host $remote_host"
+            
+        fi
+        
+        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "[ -d $remote_dir ]"
+        if [ $? -eq 0 ]; then
+            ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "rm -rf $remote_dir"
+            echo "The rvm cleaned up $remote_dir cleaned up on host $remote_host"
+            
+        fi
+        
+        
+    fi
+    
+    
+    
+    
+    
+}
+
+run_test(){
+    local remote_user="$1"
+    local remote_host="$2"
+    local remote_dir="$3"
+    local file_name="$4"
+    local run_id="$5"
+    local output_dir="$6"
+    local hostname_out="$7"
+    local output_file_name="${file_name%.*}-$run_id.html"
+    local output_text_file_name="${file_name%.*}-$run_id.txt"
+    echo "--------------------------------------------"
+    echo "$file_name   $remote_host"
+    echo "Run test case " $file_name "on" $remote_host
+    
+    if [[ "$remote_host" =~ "$hostname_out" ]]; then
+        source /rvm/.rvm/scripts/rvm; rvm use ruby-2.6.6; echo "$PATH"; cd "$remote_dir"; cucumber  "$file_name" --format html --out "$output_file_name" --format summary --out "$output_text_file_name"; cp "$remote_dir"/"$output_file_name" "$output_dir"; cp "$remote_dir"/"$output_text_file_name" "$output_dir"
+    else
+        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $remote_user@$remote_host 'source /rvm/.rvm/scripts/rvm; rvm use ruby-2.6.6; echo $PATH; cd '$remote_dir'; cucumber  '$file_name' --format html --out  '$output_file_name'   --format summary --out  '$output_text_file_name''
+        if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$remote_user@$remote_host:$remote_dir/$output_file_name" "$output_dir"; then
+            echo "Successfully scp $remote_dir/$output_file_name"
+        else
+            echo "Failed to deploy $remote_dir/$output_file_name"
+        fi
+
+        if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$remote_user@$remote_host:$remote_dir/$output_text_file_name" "$output_dir"; then
+            echo "Successfully scp $remote_dir/$output_text_file_name"
+        else
+            echo "Failed to deploy $remote_dir/$output_text_file_name"
+        fi
+    fi
+    
+    echo "--------------------------------------------"
+}
+# Function to check and deploy feature files
+check_and_deploy() {
+    # Function arguments
+    local local_dir="$1"
+    local remote_user="$2"
+    local remote_host="$3"
+    local remote_dir="$4"
+    local run_id="$5"
+    local local_output_dir="$6"
+    local config_file="$7"
+    local proxy_node="proxy"
+    hostname_output=$(hostname)
+    # Check if required arguments are provided
+    if [ -z "$local_dir" ] || [ -z "$remote_user" ] || [ -z "$remote_host" ] || [ -z "$remote_dir" ]; then
+        echo "Usage: check_and_deploy <local_dir> <remote_user> <remote_host> <remote_dir>"
+        return 1
+    fi
+    
+    #If the test cases needs to run on the host system
+    if [[ "$host" =~ "$hostname_output" ]]; then
+        # Loop through all files in the local directory
+        for file in "$local_dir"/*; do
+            
+            # Check if it's a regular file and ends with .feature extension
+            if [ -f "$file" ] && [[ "$file" =~ \.feature$ ]]; then
+                check_and_deploy_dependencies "rvm.tar" $remote_user $remote_host $remote_dir $hostname_output
+                if [ -d "$local_dir" ]; then
+                    echo "Local directory exists $local_dir "
+                    
+                    if [ -d "$remote_dir" ]; then
+                        
+                        echo "Remote directory $remote_dir"
+                        cp -r "$local_dir"/* "$remote_dir"
+                        chmod 777 -R  $remote_dir
+                        
+                        if [ -f $config_file ]; then
+                            cp $config_file "$remote_dir"
+                        fi
+                        echo "Successfully deployed test cases directory"
+                    else
+                        echo "Failed to deploy test cases directory"
+                    fi
+                    
+                fi
+                local filename=$(basename "$file")
+                run_test $remote_user $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+            fi
+        done
+        elif [[ "$host" =~ "$proxy_node" ]]; then
+            local nodechamberproxy="chamber-proxy"
+            local nodesharedproxy="hub-proxy"
+            if [[ "$local_dir" =~ "$nodechamberproxy" ]]; then    
+        
+                for file in "$local_dir"/*; do
+                    
+                    # Check if it's a regular file and ends with .txt extension
+                    if [ -f "$file" ] && [[ "$file" =~ \.feature$ ]]; then
+                        
+                        check_and_deploy_dependencies "rvm.tar" root $remote_host $remote_dir $hostname_output
+                        #If the template directory exist in the test folder
+                        if [ -d "$local_dir"/Template ]; then
+                            echo "Template directory exists"
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -rv "$local_dir"/Template "root@$remote_host:$remote_dir/"; then
+                                echo "Successfully deployed template directory"
+                                ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "root@$remote_host" "chmod 777 -R $remote_dir/Template"
+                            else
+                                echo "Failed to deploy template directory"
+                            fi
+                        fi
+                        
+                        #If the script directory exist in the test folder
+                        if [ -d "$local_dir"/script ]; then
+                            echo "script directory exists"
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -rv "$local_dir"/script "root@$remote_host:$remote_dir/"; then
+                                echo "Successfully deployed script directory"
+                                ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "root@$remote_host" "chmod 777 -R $remote_dir/script"
+                            else
+                                echo "Failed to deploy script directory"
+                            fi
+                        fi
+                        
+                        if [ -f "$config_file" ]; then
+                            local config_filename=$(basename "$config_rb")
+                            echo "Specfic RB file to copy $config_filename"
+                            # Check if the file exists on the remote host
+                            if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "root@$remote_host" "[ -f $remote_dir/$config_filename ]"; then
+                                echo "$config_filename_ already exists on $remote_host."
+                            else
+                                echo "Deploying $config_filename to $remote_host."
+                                
+                                # Use scp to transfer the file
+                                if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$config_file" "root@$remote_host:$remote_dir/"; then
+                                    echo "Successfully deployed $config_filename."
+                                    
+                                else
+                                    echo "Failed to deploy $config_filename!"
+                                fi
+                            fi
+                        fi
+                        
+                        for file_rb in "$local_dir"/features/step_definitions/*.rb; do
+                            # Check if it's a regular file
+                            
+                            if [ -f "$file_rb" ]; then
+                                local filename_rb=$(basename "$file_rb")
+                                echo "Specfic RB file to copy $filename_rb"
+                                # Check if the file exists on the remote host
+                                if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "root@$remote_host" "[ -f $remote_dir/features/step_definitions/$filename_rb ]"; then
+                                    echo "$filename_rb_ already exists on $remote_host."
+                                else
+                                    echo "Deploying $filename_rb to $remote_host."
+                                    
+                                    # Use scp to transfer the file
+                                    if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$file_rb" "root@$remote_host:$remote_dir/features/step_definitions/"; then
+                                        echo "Successfully deployed $filename_rb."
+                                        
+                                    else
+                                        echo "Failed to deploy $filename_rb!"
+                                    fi
+                                fi
+                            fi
+                        done
+                        
+                        local filename=$(basename "$file")
+                        #echo $filename         $file
+                        # Check if the file exists on the remote host
+                        if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "root@$remote_host" "[ -f $remote_dir/$filename ]"; then
+                            echo "$filename already exists on $remote_host."
+                            run_test root $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                            clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+                        else
+                            echo "Deploying $filename to $remote_host..."
+                            
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$file" "root@$remote_host:$remote_dir"; then
+                                echo "Successfully deployed $filename."
+                                run_test root $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                                clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+                            else
+                                echo "Failed to deploy $filename!"
+                            fi
+                        fi
+                    fi
+                done
+            elif [[ "$local_dir" =~ "$nodesharedproxy" ]]; then
+
+                for file in "$local_dir"/*; do
+                    
+                    # Check if it's a regular file and ends with .txt extension
+                    if [ -f "$file" ] && [[ "$file" =~ \.feature$ ]]; then
+                        
+                        check_and_deploy_dependencies "rvm.tar" orchestrator $remote_host $remote_dir $hostname_output
+                        #If the template directory exist in the test folder
+                        if [ -d "$local_dir"/Template ]; then
+                            echo "Template directory exists"
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -rv "$local_dir"/Template "orchestrator@$remote_host:$remote_dir/"; then
+                                echo "Successfully deployed template directory"
+                                ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "orchestrator@$remote_host" "chmod 777 -R $remote_dir/Template"
+                            else
+                                echo "Failed to deploy template directory"
+                            fi
+                        fi
+                        
+                        #If the script directory exist in the test folder
+                        if [ -d "$local_dir"/script ]; then
+                            echo "script directory exists"
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -rv "$local_dir"/script "orchestrator@$remote_host:$remote_dir/"; then
+                                echo "Successfully deployed script directory"
+                                ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "orchestrator@$remote_host" "chmod 777 -R $remote_dir/script"
+                            else
+                                echo "Failed to deploy script directory"
+                            fi
+                        fi
+                        
+                        if [ -f "$config_file" ]; then
+                            local config_filename=$(basename "$config_rb")
+                            echo "Specfic RB file to copy $config_filename"
+                            # Check if the file exists on the remote host
+                            if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "orchestrator@$remote_host" "[ -f $remote_dir/$config_filename ]"; then
+                                echo "$config_filename_ already exists on $remote_host."
+                            else
+                                echo "Deploying $config_filename to $remote_host."
+                                
+                                # Use scp to transfer the file
+                                if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$config_file" "orchestrator@$remote_host:$remote_dir/"; then
+                                    echo "Successfully deployed $config_filename."
+                                    
+                                else
+                                    echo "Failed to deploy $config_filename!"
+                                fi
+                            fi
+                        fi
+                        
+                        for file_rb in "$local_dir"/features/step_definitions/*.rb; do
+                            # Check if it's a regular file
+                            
+                            if [ -f "$file_rb" ]; then
+                                local filename_rb=$(basename "$file_rb")
+                                echo "Specfic RB file to copy $filename_rb"
+                                # Check if the file exists on the remote host
+                                if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "orchestrator@$remote_host" "[ -f $remote_dir/features/step_definitions/$filename_rb ]"; then
+                                    echo "$filename_rb_ already exists on $remote_host."
+                                else
+                                    echo "Deploying $filename_rb to $remote_host."
+                                    
+                                    # Use scp to transfer the file
+                                    if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$file_rb" "orchestrator@$remote_host:$remote_dir/features/step_definitions/"; then
+                                        echo "Successfully deployed $filename_rb."
+                                        
+                                    else
+                                        echo "Failed to deploy $filename_rb!"
+                                    fi
+                                fi
+                            fi
+                        done
+                        
+                        local filename=$(basename "$file")
+                        #echo $filename         $file
+                        # Check if the file exists on the remote host
+                        if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "orchestrator@$remote_host" "[ -f $remote_dir/$filename ]"; then
+                            echo "$filename already exists on $remote_host."
+                            run_test orchestrator $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                            clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+                        else
+                            echo "Deploying $filename to $remote_host..."
+                            
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$file" "orchestrator@$remote_host:$remote_dir"; then
+                                echo "Successfully deployed $filename."
+                                run_test orchestrator $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                                clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+                            else
+                                echo "Failed to deploy $filename!"
+                            fi
+                        fi
+                    fi
+                done
+
+            fi
+        
+    else
+        for file in "$local_dir"/*; do
+            
+            # Check if it's a regular file and ends with .txt extension
+            if [ -f "$file" ] && [[ "$file" =~ \.feature$ ]]; then
+                check_and_deploy_dependencies "rvm.tar" $remote_user $remote_host $remote_dir $hostname_output
+                #If the template directory exist in the test folder
+                if [ -d "$local_dir"/Template ]; then
+                    echo "Template directory exists"
+                    # Use scp to transfer the file
+                    if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -rv "$local_dir"/Template "$remote_user@$remote_host:$remote_dir/"; then
+                        echo "Successfully deployed template directory"
+                        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "chmod 777 -R $remote_dir/Template"
+                    else
+                        echo "Failed to deploy template directory"
+                    fi
+                fi
+                
+                #If the script directory exist in the test folder
+                if [ -d "$local_dir"/script ]; then
+                    echo "script directory exists"
+                    # Use scp to transfer the file
+                    if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -rv "$local_dir"/script "$remote_user@$remote_host:$remote_dir/"; then
+                        echo "Successfully deployed script directory"
+                        ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -q "$remote_user@$remote_host" "chmod 777 -R $remote_dir/script"
+                    else
+                        echo "Failed to deploy script directory"
+                    fi
+                fi
+                
+                if [ -f "$config_file" ]; then
+                    local config_filename=$(basename "$config_rb")
+                    echo "Specfic RB file to copy $config_filename"
+                    # Check if the file exists on the remote host
+                    if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$remote_user@$remote_host" "[ -f $remote_dir/$config_filename ]"; then
+                        echo "$config_filename_ already exists on $remote_host."
+                    else
+                        echo "Deploying $config_filename to $remote_host."
+                        
+                        # Use scp to transfer the file
+                        if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$config_file" "$remote_user@$remote_host:$remote_dir/"; then
+                            echo "Successfully deployed $config_filename."
+                            
+                        else
+                            echo "Failed to deploy $config_filename!"
+                        fi
+                    fi
+                fi
+                
+                for file_rb in "$local_dir"/features/step_definitions/*.rb; do
+                    # Check if it's a regular file
+                    
+                    if [ -f "$file_rb" ]; then
+                        local filename_rb=$(basename "$file_rb")
+                        echo "Specfic RB file to copy $filename_rb"
+                        # Check if the file exists on the remote host
+                        if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$remote_user@$remote_host" "[ -f $remote_dir/features/step_definitions/$filename_rb ]"; then
+                            echo "$filename_rb_ already exists on $remote_host."
+                        else
+                            echo "Deploying $filename_rb to $remote_host."
+                            
+                            # Use scp to transfer the file
+                            if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$file_rb" "$remote_user@$remote_host:$remote_dir/features/step_definitions/"; then
+                                echo "Successfully deployed $filename_rb."
+                                
+                            else
+                                echo "Failed to deploy $filename_rb!"
+                            fi
+                        fi
+                    fi
+                done
+                
+                local filename=$(basename "$file")
+                #echo $filename         $file
+                # Check if the file exists on the remote host
+                if ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$remote_user@$remote_host" "[ -f $remote_dir/$filename ]"; then
+                    echo "$filename already exists on $remote_host."
+                    run_test $remote_user $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                    clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+                else
+                    echo "Deploying $filename to $remote_host..."
+                    
+                    # Use scp to transfer the file
+                    if scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$file" "$remote_user@$remote_host:$remote_dir"; then
+                        echo "Successfully deployed $filename."
+                        run_test $remote_user $remote_host $remote_dir $filename $run_id $local_output_dir $hostname_output
+                        clean_up_remote $remote_user $remote_host $remote_dir $hostname_output
+                    else
+                        echo "Failed to deploy $filename!"
+                    fi
+                fi
+            fi
+        done
+        
+    fi
+}
+
+
+uuid=$(uuidgen)
+runid=${uuid:0:5}
+
+timestamp=$(date +"%Y-%m-%dT%H%M%S")
+echo "----------------------------------------------------"
+echo "Testing Automation RunID: $runid"
+echo "Run Timestamp: $timestamp"
+echo "----------------------------------------------------"
+
+
+test_type="$1"
+config_file="$2"
+test_dir="$3"
+output_dir="$4"
+
+# Check if required arguments are provided
+if [ -z "$test_type" ] || [ -z "$config_file" ] || [ -z "$test_dir" ] || [ -z "$output_dir" ]; then
+    echo "Usage: <test_type> <config_file> <test_dir> <output_dir>"
+    return 1
+fi
+
+readarray -t chamber_data < <( jq -c '.chamber[]' "$config_file")
+readarray -t sharedvpc_data < <( jq -c '.shared[]' "$config_file")
+readarray -t drmvpc_data < <( jq -c '.drm[]' "$config_file")
+
+directory=""
+
+if [[ $test_type =~ "chambersanity" ]]; then
+    directory=$test_dir"/chambersanity/backend"
+    elif [[ $test_type =~ "prodsanity" ]]; then
+    directory=$test_dir"/prodsanity/backend"
+    elif [[ $test_type =~ "integration" ]]; then
+    directory=$test_dir"/integration/backend"
+    elif [[ $test_type =~ "staging" ]]; then
+    directory=$test_dir"/staging/backend"
+fi
+echo "Directory tst case $directory"
+
+for dir in "$directory"/*; do
+    # Check if it's a directory (not a file or symbolic link)
+    if [[ -d "$dir" ]]; then
+        # Get the directory name without path
+        dir_name=$(basename "$dir")
+        if [[ $dir_name =~ "chamber" ]]; then
+            edit_dir_name="$(echo "$dir_name" | sed  's/chamber//')"
+            
+            for item in "${chamber_data[@]}"
+            do
+                
+                #echo "$chamber_data"
+                host="$(echo "$item" | cut -d ':' -f1 | tr -d '"')"
+                ipaddress="$(echo "$item" | cut -d ':' -f2 | tr -d '"')"
+                if [[ "$host" =~ "$edit_dir_name" ]]; then
+                    check_and_deploy $dir root $host '/tmp/testcases' $runid $output_dir $config_file
+                    echo "$host    $ipaddress"
+                fi
+                
+                
+            done
+            elif [[ $dir_name =~ "hub" ]]; then
+            edit_dir_name="$(echo "$dir_name" | sed  's/hub//')"
+            echo "Edit Dir Hyb Name $edit_dir_name"
+            for item in "${sharedvpc_data[@]}"
+            do
+                
+                host="$(echo "$item" | cut -d ':' -f1 | tr -d '"')"
+                echo "Host is: $host"
+                
+                ipaddress="$(echo "$item" | cut -d ':' -f2 | tr -d '"')"
+                if [[ "$host" =~ "$edit_dir_name" ]]; then
+                    check_and_deploy $dir root $host '/tmp/testcases' $runid $output_dir $config_file
+                    
+                    
+                    echo "$host    $ipaddress"
+                fi
+                
+                
+            done
+            elif [[ $dir_name =~ "drm" ]]; then
+            edit_dir_name="$(echo "$dir_name" | sed  's/drm//')"
+            echo "$edit_dir_name" 
+            for item in "${drmvpc_data[@]}"
+            do
+                
+                echo "$drmvpc_data"
+                host="$(echo "$item" | cut -d ':' -f1 | tr -d '"')"
+                ipaddress="$(echo "$item" | cut -d ':' -f2 | tr -d '"')"
+		echo "Host is: $host"
+                if [[ "$host" =~ "$edit_dir_name" ]]; then
+                    check_and_deploy $dir root $host '/tmp/testcases' $runid $output_dir $config_file
+                    echo "$host    $ipaddress"
+                fi
+            done
+        fi
+        
+    fi
+done
+
+exit $?
