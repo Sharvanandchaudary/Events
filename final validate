@@ -1,0 +1,93 @@
+name: Validate Chamber
+
+on:
+  workflow_call:
+    inputs:
+      aws_ips:
+        required: true
+        type: string
+      os_ips:
+        required: true
+        type: string
+      test_type:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      aws_ips:
+        required: true
+        type: string
+      os_ips:
+        required: true
+        type: string
+      test_type:
+        required: true
+        type: string
+
+jobs:
+  validate:
+    name: Run Chamber Validation
+    runs-on: self-hosted  # Admin node (TB00 or UT03)
+
+    steps:
+      - name: Checkout test repo (cloud3.0-test-cases)
+        uses: actions/checkout@v3
+        with:
+          repository: your-org/cloud3.0-test-cases
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: chamber-tests
+
+      - name: Set up Ruby and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby-full jq unzip rsync
+          gem install bundler
+
+      - name: Verify rvm.tar availability
+        run: |
+          if [ ! -f /tmp/rvm.tar ]; then
+            cp chamber-tests/rvm.tar /tmp/rvm.tar
+          fi
+
+      - name: Update config.json with IPs and test type
+        run: |
+          CONFIG_PATH=chamber-tests/config/config.json
+          jq \
+            --arg aws_ip "${{ inputs.aws_ips }}" \
+            --arg os_ip "${{ inputs.os_ips }}" \
+            --arg test_type "${{ inputs.test_type }}" \
+            '.chambers.test.nodes.aws = ($aws_ip | split(",")) | \
+             .chambers.test.nodes.openstack = ($os_ip | split(",")) | \
+             .chambers.test.test_type = $test_type' \
+            "$CONFIG_PATH" > temp.json && mv temp.json "$CONFIG_PATH"
+
+      - name: Run Cucumber Tests
+        run: |
+          cd chamber-tests
+          chmod +x ./cloud3testautomationlauncher.sh
+          ./cloud3testautomationlauncher.sh
+
+      - name: Upload summary HTML report
+        uses: actions/upload-artifact@v3
+        with:
+          name: cucumber-html-report
+          path: chamber-tests/reports/summary.html
+
+      - name: Upload full test reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: full-test-report
+          path: chamber-tests/reports/
+
+      - name: Send email summary
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.example.com
+          server_port: 465
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASS }}
+          subject: Chamber Test Report - ${{ inputs.test_type }}
+          body: "Attached is the chamber validation summary report."
+          to: vpasala@cadence.com
+          attachments: chamber-tests/reports/summary.html
