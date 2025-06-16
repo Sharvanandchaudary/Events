@@ -1,0 +1,47 @@
+name: Validate Chamber
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Run Chamber Validation
+    runs-on: self-hosted  # This runner is on the admin node (e.g., TB00 or UT03)
+
+    steps:
+      - name: Checkout test repo (cloud3.0-test-cases)
+        uses: actions/checkout@v3
+        with:
+          repository: IT/cloud3.0-test-cases
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: chamber-tests
+
+      - name: Set up Ruby and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby-full jq unzip rsync
+          gem install bundler
+
+      - name: Verify rvm.tar availability
+        run: |
+          if [ ! -f /tmp/rvm.tar ]; then
+            cp chamber-tests/rvm.tar /tmp/rvm.tar
+          fi
+
+      - name: Run Cucumber Tests
+        run: |
+          cd chamber-tests
+          chmod +x ./cloud3testautomationlauncher.sh
+          ./cloud3testautomationlauncher.sh
+
+      - name: Upload Summary HTML report
+        uses: actions/upload-artifact@v3
+        with:
+          name: cucumber-html-report
+          path: chamber-tests/reports/summary.html
+
+      - name: Upload Full Test Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: full-test-report
+          path: chamber-tests/reports/
