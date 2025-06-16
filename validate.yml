@@ -1,83 +1,74 @@
-name: Validate Chamber
+name: Validate Test Chamber
 
 on:
   workflow_dispatch:
     inputs:
-      chamber_id:
+      test_type:
         required: true
         type: string
-      aws_ip:
-        required: true
-        type: string
-      os_ip:
+      config_json:
         required: true
         type: string
   workflow_call:
     inputs:
-      chamber_id:
+      test_type:
         required: true
         type: string
-      aws_ip:
-        required: true
-        type: string
-      os_ip:
+      config_json:
         required: true
         type: string
 
 jobs:
   validate:
-    name: Run Chamber Validation
-    runs-on: self-hosted  # This runner is on the admin node (e.g., TB00 or UT03)
+    name: Run Full Validation Suite
+    runs-on: self-hosted  # This is TB00/UT01 admin node runner
 
     steps:
-      - name: Checkout test repo (cloud3.0-test-cases)
+      - name: Checkout test repo to admin node
         uses: actions/checkout@v3
         with:
-          repository: your-org/cloud3.0-test-cases
+          repository: cadence/cloud3.0-test-cases
+          path: cloud3.0-test-cases-main
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          path: chamber-tests
 
-      - name: Set up Ruby and dependencies
+      - name: Set up required tools on admin node
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby-full jq unzip rsync
+          sudo apt-get update && sudo apt-get install -y ruby-full jq unzip uuid-runtime
           gem install bundler
 
-      - name: Copy rvm.tar to /tmp if not exists
+      - name: Ensure /tmp/rvm.tar exists
         run: |
           if [ ! -f /tmp/rvm.tar ]; then
-            cp chamber-tests/rvm.tar /tmp/rvm.tar
+            cp /root/cucumber/rvm.tar /tmp/rvm.tar
           fi
 
-      - name: Prepare test config
+      - name: Generate config.json dynamically
         run: |
-          CONFIG_PATH=chamber-tests/config/config.json
-          jq \
-            --arg chamber_id "${{ inputs.chamber_id }}" \
-            --arg aws_ip "${{ inputs.aws_ip }}" \
-            --arg os_ip "${{ inputs.os_ip }}" \
-            '.chambers[$chamber_id].nodes.aws = $aws_ip | .chambers[$chamber_id].nodes.openstack = $os_ip' \
-            "$CONFIG_PATH" > temp.json && mv temp.json "$CONFIG_PATH"
+          echo '${{ inputs.config_json }}' > /root/cucumber/config.json
 
-      - name: Run Cucumber Tests
+      - name: Run Launcher Script
         run: |
-          cd chamber-tests
-          chmod +x ./cloud3testautomationlauncher.sh
-          ./cloud3testautomationlauncher.sh
+          chmod +x /root/cucumber/cloud3testautomationlauncher.sh
+          cd /root/cucumber
+          ./cloud3testautomationlauncher.sh \
+            ${{ inputs.test_type }} \
+            config.json \
+            /root/cucumber/cloud3.0-test-cases-main \
+            /root/cucumber/output/
 
-      - name: Upload test HTML report to GitHub Actions UI
+      - name: Upload HTML summary
         uses: actions/upload-artifact@v3
         with:
-          name: cucumber-html-report
-          path: chamber-tests/reports/summary.html
+          name: cucumber-html-summary
+          path: /root/cucumber/output/*.html
 
-      - name: Upload complete test report folder
+      - name: Upload All Test Reports
         uses: actions/upload-artifact@v3
         with:
-          name: full-test-report
-          path: chamber-tests/reports/
+          name: all-test-outputs
+          path: /root/cucumber/output/
 
-      - name: Send Email Summary Report
+      - name: Email Summary Report
         if: always()
         uses: dawidd6/action-send-mail@v3
         with:
@@ -85,7 +76,72 @@ jobs:
           server_port: 465
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASS }}
-          subject: Chamber Test Report - ${{ inputs.chamber_id }}
-          body: "Please find the attached chamber validation report."
+          subject: "Cloud3 Validation - ${{ inputs.test_type }} Run"
+          body: "Test run completed. Find the attached summary report."
           to: vpasala@cadence.com
-          attachments: chamber-tests/reports/summary.html
+          attachments: /root/cucumber/output/*.html
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+name: Adhoc Chamber Test Runner
+
+description: "Manually trigger test on any mission(s) by passing inline JSON config."
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: "Type of test to run (e.g. chambersanity, sharedsanity, integration)"
+        required: true
+        type: string
+      raw_config:
+        description: "Inline config.json structure with chamber/shared/drm mappings"
+        required: true
+        type: string
+
+jobs:
+  adhoc-validate:
+    name: Run Adhoc Chamber Validation
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout test cases repo
+        uses: actions/checkout@v3
+        with:
+          repository: cadence/cloud3.0-test-cases
+          path: cloud3.0-test-cases-main
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Install only required tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq uuid-runtime unzip
+
+      - name: Ensure RVM Archive is in /tmp
+        run: |
+          if [ ! -f /tmp/rvm.tar ]; then
+            cp /root/cucumber/rvm.tar /tmp/rvm.tar
+          fi
+
+      - name: Inject Inline Config into File
+        run: |
+          echo '${{ inputs.raw_config }}' > /root/cucumber/config.json
+
+      - name: Run Adhoc Launcher Script
+        run: |
+          chmod +x /root/cucumber/cloud3testautomationlauncher.sh
+          cd /root/cucumber
+          ./cloud3testautomationlauncher.sh \
+            ${{ inputs.test_type }} \
+            config.json \
+            /root/cucumber/cloud3.0-test-cases-main \
+            /root/cucumber/output/
+
+      - name: Upload HTML summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: adhoc-html-summary
+          path: /root/cucumber/output/*.html
+
+      - name: Upload All Test Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: adhoc-full-report
+          path: /root/cucumber/output/
