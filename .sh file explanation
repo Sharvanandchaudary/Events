@@ -1,0 +1,165 @@
+🔍 🔧 What This Script Is Doing (High-Level)
+This script is a mission-level orchestrator for running test automation across multiple nodes (called missions) in a "chamber" environment. It:
+
+Parses a structured config.json containing IP addresses for each chamber/DRM/hub
+
+Copies the RVM Ruby test runtime (rvm.tar) to target nodes
+
+Pushes test cases and step definitions
+
+Runs Cucumber tests remotely
+
+Pulls back reports
+
+Cleans up the remote temp files
+
+📘 INPUTS EXPECTED
+bash
+Copy
+Edit
+test_type       # e.g. "chambersanity"
+config_file     # path to config.json with IP info
+test_dir        # path to folder like cloud3.0-test-cases
+output_dir      # where to dump reports
+Example:
+
+bash
+Copy
+Edit
+./cloud3testautomationlauncher.sh chambersanity config/config.json /root/cucumber/cloud3.0-test-cases-main reports/
+🧠 SECTION-WISE EXPLANATION
+1. check_and_deploy_dependencies()
+Purpose:
+
+Check if /rvm already exists on remote host
+
+If not, SCP rvm.tar to remote and untar
+
+Ensure /tmp/testcases exists on remote with full permissions
+
+Bootstrap the Cucumber project with cucumber --init
+
+bash
+Copy
+Edit
+ssh $remote_user@$remote_host "tar -xvf /tmp/rvm.tar -C /"
+2. clean_up_remote()
+Purpose:
+
+After test execution, cleanup the /rvm and /tmp/testcases folders from the remote host
+
+Skips cleanup if the node is the admin node (TB00)
+
+3. run_test()
+Purpose:
+
+SSH into the mission node
+
+Run cucumber using:
+
+bash
+Copy
+Edit
+cucumber file.feature --format html --out report.html --format summary --out report.txt
+Pull results back via scp to $output_dir
+
+Also does local test execution if running on the admin node.
+
+4. check_and_deploy()
+Main engine of deployment and execution
+
+Steps:
+
+Loop through all .feature test cases in a given test folder
+
+For each file:
+
+Ensure dependencies are present (calls check_and_deploy_dependencies)
+
+Copy .feature file to remote node
+
+Optionally copy:
+
+Template/
+
+script/
+
+step definitions (*.rb)
+
+config file
+
+Run the test with run_test()
+
+Clean up the node with clean_up_remote()
+
+Supports 3 types of node categories:
+
+Chamber node (e.g., chamber01)
+
+Hub proxy node (hub-proxy)
+
+DRM node (drm01)
+
+Handles their special naming and logic accordingly.
+
+5. 🔄 Main Driver Code
+bash
+Copy
+Edit
+readarray -t chamber_data < <( jq -c '.chamber[]' "$config_file")
+readarray -t sharedvpc_data < <( jq -c '.shared[]' "$config_file")
+readarray -t drmvpc_data < <( jq -c '.drm[]' "$config_file")
+Extracts IP mappings from the JSON file:
+
+json
+Copy
+Edit
+{
+  "chamber": [ "tb02out01:10.106.42.100" ],
+  "shared": [ "hubproxy01:172.31.40.8" ],
+  "drm": [ "drm-01:10.106.35.9" ]
+}
+Then it:
+
+Matches directory names like chamber01/ to tb01out01
+
+Matches hubc01/ to a hubproxy01
+
+Calls check_and_deploy() for each node
+
+📝 What It Assumes
+Password-less SSH from admin node to all remote IPs
+
+rvm.tar is in /tmp/ of admin node
+
+Each test case is in a separate folder (e.g., chambersanity/backend/chamber01)
+
+Step definitions and optional scripts/templates are organized inside the respective directories
+
+✅ Summary of Key Variables
+Variable	Purpose
+runid	Unique ID for this test run (used in report names)
+remote_dir	Always /tmp/testcases
+output_dir	Folder where reports get copied
+hostname_output	Used to detect if node is local admin
+config_file	Contains chamber-to-IP mappings
+
+📊 Summary Table
+Component	Description
+rvm.tar	Ruby + cucumber pre-installed environment
+config.json	IP mapping per chamber/shared/drm
+*.feature files	Cucumber test cases
+*.rb files	Step definitions
+check_and_deploy	Handles setup, copy, and triggering tests
+run_test	Runs cucumber test and pulls HTML reports
+clean_up_remote	Removes /rvm and /tmp/testcases remotely after test
+
+💡 Suggestions for Improvement
+Error handling & retries for SSH/SCP failures
+
+Logs & timestamped output folders
+
+Parameterize remote_dir and make chmod 777 more secure
+
+Make it possible to parallelize across missions for speed
+
