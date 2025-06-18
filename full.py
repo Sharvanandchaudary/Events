@@ -15,15 +15,22 @@ def parse_args():
 
 # Step 2: Build and verify chamber path
 def get_chamber_path(env, target, chamber):
-    path = os.path.join("CustomerVPC", "terraform", "config", "envs", env, env, target, chamber)
-    full_path = os.path.abspath(path)
+    if env == "prod":
+        # Prod path logic
+        path = os.path.join("CustomerVPC", "terraform", "config", "envs", env, env, target, chamber)
+    else:
+        # Non-prod path logic
+        path = os.path.join("CustomerVPC", "terraform", "config", "envs", env, target, chamber)
 
-    print(f"🔍 Looking for chamber path: {full_path}")
+    full_path = os.path.abspath(path)
+    print(f"Looking for chamber path: {full_path}")
+
     if not os.path.exists(full_path):
         raise FileNotFoundError(f"❌ Chamber path does not exist: {full_path}")
-    
+
     print(f"✅ Chamber path found: {full_path}")
     return full_path
+
 
 # Step 3: Read and validate the tfvars JSON file
 def read_chamber_config(chamber_path, chamber):
