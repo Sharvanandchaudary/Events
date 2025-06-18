@@ -104,3 +104,27 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+========================================================================
+import json
+
+def read_chamber_config(chamber_path, chamber):
+    # Look for file ending in `.tfvars.json`, preferably {chamber}.tfvars.json
+    tfvars_filename = f"{chamber}.tfvars.json"
+    tfvars_path = os.path.join(chamber_path, tfvars_filename)
+
+    if not os.path.exists(tfvars_path):
+        raise FileNotFoundError(f"❌ Expected config file not found: {tfvars_path}")
+
+    print(f"📖 Reading config: {tfvars_path}")
+    with open(tfvars_path, "r") as f:
+        data = json.load(f)
+
+    # Validate structure
+    if "compute" not in data or \
+       "compute_details" not in data["compute"] or \
+       "node_details" not in data["compute"]["compute_details"]:
+        raise ValueError("❌ Config is missing required structure: compute → compute_details → node_details")
+
+    print(f"✅ Valid config loaded for chamber: {chamber}")
+    return tfvars_path, data
