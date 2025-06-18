@@ -168,4 +168,63 @@ def main():
     chamber_path = get_chamber_path(args.environment, args.target, args.chamber)
     tfvars_path, config_data = read_chamber_config(chamber_path, args.chamber)
 
-    ensure_static_nodes(config_data)
+
+def add_worker_nodes(data, nservers):
+    node_details = data["compute"]["compute_details"]["node_details"]
+    eni_mapping = data.get("networking", {}).get("customer_eni_mapping", {})
+
+    # Find all existing wrkNN keys
+    existing_workers = [k for k in node_details.keys() if k.startswith("wrk") and k[3:].isdigit()]
+    existing_nums = sorted([int(k[3:]) for k in existing_workers])
+    next_index = max(existing_nums, default=0) + 1
+
+    # Base configs
+    default_worker = {
+        "instance_type": "baremetal",
+        "image": "a3b8b3b7-0fe0-402c-9e35-8999dc07e564",
+        "volume_size": 100,
+        "additional_volumes": None
+    }
+
+    hostnum_base = 101 + len(existing_workers)
+    added = []
+
+    for i in range(nservers):
+        wrk_name = f"wrk{next_index + i:02d}"
+        eni_name = f"{wrk_name}-eni"
+        hostnum = hostnum_base + i
+
+        # Add to node_details
+        node_details[wrk_name] = {
+            **default_worker,
+            "name": wrk_name,
+            "eni_name": eni_name
+        }
+
+        # Add to eni mapping
+        eni_mapping[eni_name] = {
+            "name": eni_name,
+            "subnet": "ComputeSubnet2a",
+            "security_groups": [
+                "Chm-AccessFromUtlSvr",
+                "PrivateSG",
+                "CLA-SG",
+                "Platform-SG"
+            ],
+            "ip": {
+                "private_ip": "${{cc_chamber_internal_cidr}}",
+                "public_ip": "${{cc_chamber_cidr}}",
+                "hostnum": hostnum
+            }
+        }
+
+        added.append(wrk_name)
+
+    # Update eni_mapping back into data
+    data["networking"]["customer_eni_mapping"] = eni_mapping
+
+    if added:
+        print(f"🚀 Added worker nodes: {', '.join(added)}")
+    else:
+        print("⚠️ No new worker nodes added.")
+add_worker_nodes(config_data, args.nservers)
