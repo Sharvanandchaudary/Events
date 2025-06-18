@@ -236,3 +236,39 @@ def write_updated_config(tfvars_path, data):
         json.dump(data, f, indent=2)
     print(f"💾 Config successfully updated and written to: {tfvars_path}")
   write_updated_config(tfvars_path, config_data)
+
+
+
+=======================================================
+import glob
+
+def find_chamber_tfvars_file(chamber):
+    root_path = os.path.join("CustomerVPC", "terraform", "config", "envs")
+    pattern = os.path.join(root_path, "**", f"{chamber}.tfvars.json")
+    matches = glob.glob(pattern, recursive=True)
+
+    if not matches:
+        raise FileNotFoundError(f"❌ Could not find {chamber}.tfvars.json anywhere under {root_path}")
+
+    # If multiple matches, take the first
+    tfvars_path = os.path.abspath(matches[0])
+    print(f"✅ Found chamber tfvars: {tfvars_path}")
+    return tfvars_path
+
+
+
+def main():
+    args = parse_args()
+    tfvars_path = find_chamber_tfvars_file(args.chamber)
+
+    with open(tfvars_path, "r") as f:
+        config_data = json.load(f)
+
+    if "compute" not in config_data or \
+       "compute_details" not in config_data["compute"] or \
+       "node_details" not in config_data["compute"]["compute_details"]:
+        raise ValueError("❌ Config is missing required structure: compute → compute_details → node_details")
+
+    ensure_static_nodes(config_data)
+    add_worker_nodes(config_data, args.nservers)
+    write_updated_config(tfvars_path, config_data)
