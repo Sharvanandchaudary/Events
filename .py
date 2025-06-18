@@ -272,3 +272,15 @@ def main():
     ensure_static_nodes(config_data)
     add_worker_nodes(config_data, args.nservers)
     write_updated_config(tfvars_path, config_data)
+
+
+def get_chamber_path(env, target, chamber):
+    path = os.path.join("CustomerVPC", "terraform", "config", "envs", env, env, target, chamber)
+    full_path = os.path.abspath(path)
+
+    if not os.path.exists(full_path):
+        raise FileNotFoundError(f"❌ Chamber path does not exist: {full_path}")
+
+    print(f"✅ Chamber path found: {full_path}")
+    return full_path
+
