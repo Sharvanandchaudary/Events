@@ -91,3 +91,184 @@ jobs:
           body: "Attached is the chamber validation summary report."
           to: vpasala@cadence.com
           attachments: chamber-tests/reports/summary.html
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✅ Deployment Functional Requirements (DFRs)
+Use Case: Add new bare metal worker nodes (wrkNN) into an existing chamber (e.g., oa98) that already contains ls01 and haproxy.
+
+1. 📂 Chamber Assumptions
+The target chamber (e.g., oa98) exists under:
+
+swift
+Copy
+Edit
+CustomerVPC/Terraform/config/envs/prod/prod1/oa98
+It has an existing Terraform state (terraform.tfstate) and the following nodes:
+
+ls01
+
+haproxy
+
+2. 🛠️ Terraform Configuration File (oa98.tfvars.json)
+You must update the existing tfvars/config JSON:
+
+✅ a. Append to compute.compute_details.node_details:
+For each new worker node:
+
+json
+Copy
+Edit
+"wrk04": {
+  "name": "wrk04",
+  "instance_type": "baremetal",
+  "image": "<VALID_RHEL8.6_IMAGE_UUID>",
+  "volume_size": 100,
+  "additional_volumes": null,
+  "eni_name": "wrk04-eni"
+}
+✅ b. Append to networking.customer_eni_mapping:
+For the ENI mapping of each worker:
+
+json
+Copy
+Edit
+"wrk04-eni": {
+  "name": "wrk04-eni",
+  "subnet": "ComputeSubnet2a",
+  "security_groups": [
+    "Chm-AccessFromUtlSvr",
+    "PrivateSG",
+    "CLA-SG",
+    "Platform-SG"
+  ],
+  "ip": {
+    "private_ip": "$${cc_chamber_internal_cidr}",
+    "public_ip": "$${cc_chamber_cidr}",
+    "hostnum": 104
+  }
+}
+Choose unique hostnum for each node (e.g., 101, 102, 103, 104…)
+
+ENI names must match eni_name from compute
+
+3. 🔁 Dynamic Automation (Optional)
+Use the Python script we built to dynamically:
+
+Detect existing wrkNN nodes
+
+Add new workers up to desired count
+
+Auto-generate corresponding ENI blocks
+
+4. 📜 Terraform Commands
+Navigate to the chamber path:
+bash
+Copy
+Edit
+cd CustomerVPC/Terraform/config/envs/prod/prod1/oa98
+Initialize:
+bash
+Copy
+Edit
+terraform init
+Plan and review changes:
+bash
+Copy
+Edit
+terraform plan -var-file="oa98.tfvars.json"
+Apply changes:
+bash
+Copy
+Edit
+terraform apply -var-file="oa98.tfvars.json"
+Or using Terragrunt:
+bash
+Copy
+Edit
+terragrunt apply
+5. 🧪 Validation After Apply
+Confirm instance creation in OpenStack Horizon dashboard.
+
+Ensure IPs and ENIs are correctly assigned.
+
+Verify instance is reachable (ping or SSH).
+
+Validate log forwarding if applicable (rsyslog to ls01).
+
+6. 🛡️ Why These Values Are Needed
+Field	Reason
+name	Unique identifier for the node
+instance_type	baremetal is mandatory for physical nodes
+image	RHEL 8.6 or approved base image ID
+eni_name	Required to map networking details
+hostnum	Used for deterministic IP assignment via CIDR math
+security_groups	Controls inbound/outbound traffic
+subnet	Aligns with VPC subnet used for compute
+
+7. 🧾 Example Final Snippet (merged)
+json
+Copy
+Edit
+"wrk04": {
+  "name": "wrk04",
+  "instance_type": "baremetal",
+  "image": "a3b8b3b7-0fe0-402c-9e35-8999dc07e564",
+  "volume_size": 100,
+  "additional_volumes": null,
+  "eni_name": "wrk04-eni"
+}
+json
+Copy
+Edit
+"wrk04-eni": {
+  "name": "wrk04-eni",
+  "subnet": "ComputeSubnet2a",
+  "security_groups": [
+    "Chm-AccessFromUtlSvr",
+    "PrivateSG",
+    "CLA-SG",
+    "Platform-SG"
+  ],
+  "ip": {
+    "private_ip": "$${cc_chamber_internal_cidr}",
+    "public_ip": "$${cc_chamber_cidr}",
+    "hostnum": 104
+  }
+}
+Would you like me to generate the full updated .tfvars.json for wrk04–wrk06 as an example based on your chamber state?
+
+
+
+
+
+
+
+
+
+
+
+Talk to Mia
+
+
+
+
+
+
+
+
+Tools
+
+
