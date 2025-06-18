@@ -228,3 +228,11 @@ def add_worker_nodes(data, nservers):
     else:
         print("⚠️ No new worker nodes added.")
 add_worker_nodes(config_data, args.nservers)
+
+
+
+def write_updated_config(tfvars_path, data):
+    with open(tfvars_path, "w") as f:
+        json.dump(data, f, indent=2)
+    print(f"💾 Config successfully updated and written to: {tfvars_path}")
+  write_updated_config(tfvars_path, config_data)
