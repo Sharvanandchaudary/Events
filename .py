@@ -132,3 +132,40 @@ def read_chamber_config(chamber_path, chamber):
 
     print(f"✅ Valid config loaded for chamber: {chamber}")
     return tfvars_path, data
+    ================================================================================
+    def ensure_static_nodes(data):
+    node_details = data["compute"]["compute_details"]["node_details"]
+
+    default_ls01 = {
+        "image": "71e5ed26-05bc-4e6e-b107-d1eb3ab65a7f",
+        "volume_size": 100,
+        "additional_volumes": "ls01_vol"
+    }
+
+    default_haproxy = {
+        "image": "fe8ba8c6-9c98-4f45-ba96-802ef7a37391",
+        "volume_size": 100,
+        "additional_volumes": None
+    }
+
+    added = []
+
+    if "ls01" not in node_details:
+        node_details["ls01"] = default_ls01
+        added.append("ls01")
+
+    if "haproxy" not in node_details:
+        node_details["haproxy"] = default_haproxy
+        added.append("haproxy")
+
+    if added:
+        print(f"🛠️ Added missing static node(s): {', '.join(added)}")
+    else:
+        print("✅ Static nodes 'ls01' and 'haproxy' already exist.")
+
+def main():
+    args = parse_args()
+    chamber_path = get_chamber_path(args.environment, args.target, args.chamber)
+    tfvars_path, config_data = read_chamber_config(chamber_path, args.chamber)
+
+    ensure_static_nodes(config_data)
