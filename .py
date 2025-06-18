@@ -101,6 +101,10 @@ def get_chamber_path(env, target, chamber):
 def main():
     args = parse_args()
     chamber_path = get_chamber_path(args.environment, args.target, args.chamber)
+    def main():
+    args = parse_args()
+    chamber_path = get_chamber_path(args.environment, args.target, args.chamber)
+    tfvars_path, config_data = read_chamber_config(chamber_path, args.chamber)
 
 if __name__ == "__main__":
     main()
