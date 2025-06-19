@@ -1,0 +1,92 @@
+{
+  "tags": {
+    "hyperscaler": "rhops"
+  },
+  "environment": "prod",
+  "name_prefix": "oa98",
+  "openstack_project_id": "b4e7f5d800c84ddbaf457388752738c2",
+  "openstack_project_name": "cc-prd-oa-chm01-prj",
+  "release" : "main",
+  "settings": {
+    "hybrid_deployment": false,
+    "aws_chamber_tfstate_key":"cloud30-chambers/config/envs/prod/prod-ae/ae99/terraform.tfstate",
+    "cc_chamber_json_s3_location": "s3://cadencecloud-e-mirrors-us-east-1/projects/orchestrator/c30-cust/ae99/awscbae99slurm01/oa98.json",
+    "cc_hub_tfstate_key": "cloud30-openstack-shr/config/envs/prod/prod/rh-atl/oa00/terraform.tfstate",
+    "drm_cidr": "10.2.250.0/23",
+    "aws_chamber_cidr": "10.2.198.0/23",
+    "aws_admin_cidr": "10.2.0.0/27",
+    "openstack_mgmt_ip": "10.107.210.15/32"
+  },
+  "compute": {
+    "compute_details": {
+      "node_details": {
+        "ls01": {
+          "image": "71e5ed26-05bc-4e6e-b107-d1eb3ab65a7f",
+          "volume_size": 100,
+          "additional_volumes" : "ls01_vol"
+        },
+        "haproxy": {
+          "image": "fe8ba8c6-9c98-4f45-ba96-802ef7a37391",
+          "volume_size": 100,
+          "additional_volumes" : null
+        },
+        "wrk01": {
+          "name": "wrk01",
+          "instance_type": "baremetal",
+          "image": "fe8ba8c6-9c98-4f45-ba96-802ef7a37391",
+          "volume_size": 100,
+          "additional_volumes": null,
+          "eni_name": "wrk01-eni"
+        }
+      }
+    }
+  },
+  "storage": {
+    "volume_type": "netapp_iscsi_enc",
+    "ebs_volume_details": {
+      "ls01_vol": {
+        "scratch": {
+          "disk": "tmp",
+          "volume_size": 100,
+          "device": "/dev/vdb"
+        }
+      }
+    }
+  },
+  "networking": {
+    "provider_vlan" : "3196",
+    "provider_cidr" : "10.106.196.0/23",
+    "baremetal" : {
+      "network_id": "3f685776-a19f-4293-bb81-ba4e75465993 ",
+      "subnet_id" : "7b258e60-a802-4102-a2cc-913b8c355ab6"
+
+      
+    },
+    "customer_vpc": {
+      "cidr_block": "10.154.192.0/23"
+    },
+    "customer_eni_mapping": {
+      "haproxy-eni": {
+        "ip": {
+          "public_ip": "10.106.168.52",
+          "hostnum": 52
+        }
+      },
+      "wrk01-eni": {
+        "name": "wrk01-eni",
+        "subnet": "ComputeSubnet2a",
+        "security_groups": [
+          "Chm-AccessFromUtlSvr",
+          "PrivateSG",
+          "CLA-SG",
+          "Platform-SG"
+        ],
+        "ip": {
+          "private_ip" : "$${cc_chamber_internal_cidr}",
+          "public_ip"  : "$${cc_chamber_cidr}",
+          "hostnum" : 101
+        }
+      }
+    }
+  }
+}
