@@ -1,0 +1,987 @@
+{
+    "tags": {
+        "OrganizationName": "IT",
+        "Terraform": "false",
+        "tosuspend": "false",
+        "todestroy": "false",
+        "Environment": "Non-Production",
+        "BusinessUnit": "cloudeng",
+        "Backup": "none",
+        "BU": "IT",
+        "Sub_BU": "VCAD"
+    },
+    "openstack_project_id": "59c2d928ef6046069a0175d74dc3dc23",
+    "openstack_project_name": "cc-test-oa-chm01-prj",
+    "openstack_region": "regionOne",
+    "source_url": "git::https://github.cadence.com/IT/terraform-openstack-chamber.git",
+    "release": "v1.2.4",
+    "netapp_version": "2.0.2",
+    "region": "us-west-2",
+    "environment": "test-1",
+    "name_prefix": "tn05",
+    "TF_VERSION": "1.5.7",
+    "settings": {
+        "hybrid_deployment": true,
+        "local_env_details": {
+            "python_version": "python3"
+        },
+        "aws_chambers_bucket_name": "cloud30-chambers-terraform-state",
+        "aws_chamber_tfstate_key": "cloud30-chambers/config/envs/non-prod/tb/tb07/terraform.tfstate",
+        "sentinel_one_server_1": "52.22.171.71/32",
+        "sentinel_one_server_2": "3.233.67.0/32",
+        "sentinel_one_server_3": "54.236.143.198/32",
+        "nessus_server_1": "162.159.140.26/32",
+        "nessus_server_2": "172.66.0.26/32",
+        "cc_admin_cidr": "10.107.183.0/24",
+        "cc_hub_tfstate_key": "cloud30-openstack-shr/config/envs/non-prod/qa/test-1/tn00/terraform.tfstate",
+        "cc_hub_bucket_name": "cloud30-hub-terraform-state",
+        "chamber_name": "tn05",
+        "cc_chamber_json_s3_location": "s3://cadencecloud-mirrors-eu-central-1/projects/orchestrator/c30-cust/tb07/awscbtb07slurm01/tn05.json",
+        "drm_cidr": "10.154.120.0/23",
+        "aws_chamber_cidr": "10.154.110.0/23",
+        "aws_admin_cidr": "10.154.96.0/27",
+        "openstack_mgmt_ip": "10.107.178.0/24"
+    },
+    "security": {
+        "vm_ssh_pub_key": "c3NoLXJzYSBBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFDQVFDeFVEb0dvVmExUGtIZEJEM0FGc0ZZVkNnbjNDRGkwRHVOUnlvVnhiUTMyVVNsNDVLYkZ6ckU4blE1QzMralgvd2JaTUJ1UHFNNnNXRkY4MTAxUmNqTXhSUnlldFUxMjZnVnFaM0VPTG12QU13S0k5U3JJcXZvYWxaYVdoYTZIalQrblhmeUtBejV2NDZBL25jL3g2aWFVcXdhVHFmYytOdER5YmhhejN5ZGIyZGxUQXJDQnRLR0RWMnZveTlRd3d5aHZiejlqZFc3T3dSSS9GU01UcUhaZElHU2FuSmp1TTZsVVhEWmJqclVSOHV5VWt4ald3K1lmdnk5T2h5U1hKVzdndTM5VytSNFhZamRWU2l5eDFsRFk4S0w5MmdxN3EwWUZtL0VBYXM4TUZaWEVBNlZzRXg3QmJtQytaRmdyTzUwK08rckJMVlZqdHk2R0xEV0dOS1NHUjNtb1daei9LZnJCZUVwd3ova29ERWR0T05EdVh4WEJvY292Y2tqU2kxVVZLc1A1bEdhY29aU3lkblRIeG9VaXlrUGdtb2xiaDlCZTVvcE5ZRW9sUXF0ZVErZkdDMGRkS0lJbE5nZlovZjVQZzdqQVkyNEdtZFM1SndhR3FTSGNGOWNuQitFcWpKb2NIRkprWmY1ZmE5QTFQOGR2c1ZkUmpUMFZudEJqRnE0bkVWT1E2N0dZenB3V09xbTV2ajhXZGpkVm0zNmpYdUg5ZDdoSjdJYWVXQWowRXAxQ0FhYmJFRGhaUlgwdldEZHoveUVhaFZPSloycVRHTjNZdDIzemJuNDB5dTlDQ1NMTHBxeEsrZ0l4LzBocTFiUlNYNXYrMC9nQVZ4UExLT2EwRk4ycXlnVmRBZlZBODJJRUhJSWV2SWwwOW9udHFGRXZ1RmRETk82VHc9PSBvcmNoZXN0cmF0b3JAY2MuY2FkZW5jZS5jb20="
+    },
+    "compute": {
+        "compute_details": {
+            "node_details": {
+                "ls01": {
+                    "name": "ls01",
+                    "instance_type": "m1.large",
+                    "image": "dbe0c761-622b-4bda-bf89-720255e881fa",
+                    "iam_role": "",
+                    "volume_size": 70,
+                    "eni_name": "cla-eni",
+                    "additional_volumes": "cla_vol"
+                },
+                "haproxy": {
+                    "name": "haproxy",
+                    "instance_type": "m1.large",
+                    "image": "dbe0c761-622b-4bda-bf89-720255e881fa",
+                    "iam_role": "",
+                    "volume_size": 70,
+                    "eni_name": "haproxy-eni",
+                    "additional_volumes": null
+                }
+            },
+            "userdata_details": {
+                "orchestrator_home": "/opt/orchestrator",
+                "recipe_tar": "chamber_run_chef.tar",
+                "mirror": "cloud30-openstack-chm",
+                "mirror_dir": "",
+                "chef_dir": "/opt/orchestrator/run_chef",
+                "chef_solo_embedded_path": "/opt/chef/embedded/bin",
+                "chef_solo_path": "/opt/chef/bin/chef-solo",
+                "chef_log_path": "/tmp/chef-log1"
+            }
+        }
+    },
+    "storage": {
+        "ebs_volume_details": {
+            "cla_vol": {
+                "Vol0_size": {
+                    "disk": "Vol0_size",
+                    "volume_size": 20,
+                    "device": "/dev/xvdc"
+                },
+                "Vol1_size": {
+                    "disk": "Vol1_size",
+                    "volume_size": 100,
+                    "device": "/dev/xvdd"
+                }
+            }
+        },
+        "aws_chamber_prefix": "aws_chamber_name",
+        "flex_cache_enabled": true,
+        "volume_size_unit": "gb",
+        "dr_cache": false,
+        "global_lock_enabled": false,
+        "guarantee_type": "none",
+        "flexcache_volumes": {
+            "processCached": {
+                "volume_size": 90,
+                "peer_volume_name": "process",
+                "junction_path": "process"
+            },
+            "vol0": {
+                "volume_size": 16,
+                "peer_volume_name": "vol0"
+            },
+            "vol1": {
+                "volume_size": 90,
+                "peer_volume_name": "vol1"
+            },
+            "rscratchCached": {
+                "volume_size": 16,
+                "peer_volume_name": "rscratch_interactive",
+                "junction_path": "rscratch_interactive"
+            },
+            "ch_home": {
+                "volume_size": "20"
+            },
+            "rsvol": {
+                "volume_size": "600"
+            }
+        },
+        "netapp_volume": {
+            "cooling_period": 31,
+            "enable_volume": true,
+            "svm_suffix": "",
+            "peer_svm_suffix": "",
+            "export_policy_name": "default",
+            "export_policy_ro_rule": "any",
+            "export_policy_rw_rule": "any",
+            "tiering_policy_name": "none",
+            "export_policy_group_id": "1001",
+            "export_policy_user_id": "65534",
+            "export_policy_unix_permission": "755",
+            "security_style": "mixed",
+            "aggr_name": "atcclapa01_p1_SAS01",
+            "percent_snapshot_space": 20,
+            "enforcement": true,
+            "reporting": true,
+            "space_guarantee": "none",
+            "snapshot_policy": "default-1weekly",
+            "encryption": false,
+            "subtype": "default",
+            "language": "C.UTF-8",
+            "home_node_ic": "atcclapa01-p1",
+            "home_node_ic2": "atcclapa01-p2",
+            "fsx_volume": {
+                "ch_home": {
+                    "volume_size": 20
+                },
+                "rsvol": {
+                    "volume_size": 90,
+                    "peer_volume_name": "rsvol_cached",
+                    "junction_path": "rsvol"
+                }
+            }
+        },
+        "netapp_peer_volume": {
+            "generate_passphrase": true,
+            "peer_application_name": "flexcache",
+            "cluster_vserver": "atcclapa01",
+            "home_node_ic": "atcclapa01-p1",
+            "home_node_ic2": "atcclapa01-p2",
+            "netapp_cluster_int_cidr": "10.107.158.128/25"
+        },
+        "route_address": "10.154.180.0/23",
+        "route_metric": "20",
+        "shared_fsxn_svm": {
+            "export_policy_name": "default",
+            "export_policy_ro_rule": "any",
+            "export_policy_rw_rule": "never",
+            "export_policy_user_id": "65534"
+        }
+    },
+    "networking": {
+        "provider_vlan": "1168",
+        "provider_cidr": "10.107.168.0/23",
+        "dns_nameserver": [
+            "10.202.56.11",
+            "10.202.56.12"
+        ],
+        "syslog": {
+            "server_ip": "10.219.251.15/32",
+            "os_port": "514",
+            "ftp_port": "515",
+            "squid_port": "516"
+        },
+        "splunk_hostname": "splunk-ufwd-sj2.cadence.com",
+        "customer_vpc": {
+            "cidr_block": "10.154.180.0/23"
+        },
+        "customer_vpc_subnets": {
+            "01-ComputeSubnet2a": {
+                "name": "ComputeSubnet2a",
+                "new_bits": 1
+            },
+            "02-ComputeSubnet2b": {
+                "name": "ComputeSubnet2b",
+                "new_bits": 2
+            },
+            "03-ComputeSubnet2c": {
+                "name": "ComputeSubnet2c",
+                "new_bits": 4
+            },
+            "04-StorageSubnet": {
+                "name": "StorageSubnet",
+                "new_bits": 4
+            },
+            "05-empty_1": {
+                "name": null,
+                "new_bits": 5
+            },
+            "06-empty_1": {
+                "name": null,
+                "new_bits": 5
+            },
+            "07-empty_1": {
+                "name": null,
+                "new_bits": 5
+            },
+            "08-empty_1": {
+                "name": null,
+                "new_bits": 5
+            }
+        },
+        "customer_vpc_sg": {
+            "Chm-AccessFromUtlSvr": {
+                "name": "Chm-AccessFromUtlSvr",
+                "description": "Utility Server Access from Chamber",
+                "sg_rules": {
+                    "ingress": {
+                        "100": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 22,
+                            "port_to": 22,
+                            "cidrs": [
+                                "0.0.0.0/0",
+                                "10.107.183.0/24"
+                            ],
+                            "description": "SSH Access from Admin 00"
+                        },
+                        "101": {
+                            "ethertype": "IPv4",
+                            "protocol": "icmp",
+                            "cidrs": [
+                                "0.0.0.0/0",
+                                "10.107.183.0/24"
+                            ],
+                            "description": "ICMP Access"
+                        },
+                        "103": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 443,
+                            "port_to": 443,
+                            "cidrs": [
+                                "10.210.132.133/32",
+                                "10.210.132.134/32",
+                                "10.210.132.135/32",
+                                "10.210.133.31/32",
+                                "10.210.133.32/32",
+                                "10.210.132.109/32",
+                                "10.207.134.182/32",
+                                "10.207.134.185/32"
+                            ],
+                            "description": "Https Access from GitHub runner"
+                        }
+                    },
+                    "egress": {}
+                }
+            },
+            "PrivateSG": {
+                "name": "PrivateSG",
+                "description": "Private security group",
+                "sg_rules": {
+                    "ingress": {
+                        "100": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10000,
+                            "port_to": 10000,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "101": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 11104,
+                            "port_to": 11105,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "102": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10566,
+                            "port_to": 10566,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "103": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10569,
+                            "port_to": 10569,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "104": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 161,
+                            "port_to": 162,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "105": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 443,
+                            "port_to": 443,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "106": {
+                            "ethertype": "IPv4",
+                            "protocol": "icmp",
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "ICMP Access FSxn"
+                        },
+                        "107": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6818,
+                            "port_to": 6818,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Slurm Daemon slurmd"
+                        },
+                        "108": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 32768,
+                            "port_to": 65535,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Srun Higher Ports"
+                        },
+                        "109": {
+                            "ethertype": "IPv4",
+                            "protocol": "",
+                            "port_from": 0,
+                            "port_to": 0,
+                            "cidrs": [
+                                "10.154.180.0/23",
+                                "10.107.168.0/23",
+                                "10.154.110.0/23"
+                            ],
+                            "description": "CC & AWS Chamber Any Connectivity"
+                        },
+                        "110": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6818,
+                            "port_to": 6818,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "SRUN from AWS Chamber"
+                        }
+                    },
+                    "egress": {
+                        "100": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 514,
+                            "port_to": 516,
+                            "cidrs": [
+                                "10.219.251.15/32"
+                            ],
+                            "description": "Syslog Server IP"
+                        },
+                        "101": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 443,
+                            "port_to": 443,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Management Port"
+                        },
+                        "102": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10000,
+                            "port_to": 10000,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "103": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 11104,
+                            "port_to": 11105,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "104": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10566,
+                            "port_to": 10566,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "105": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10569,
+                            "port_to": 10569,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "106": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 161,
+                            "port_to": 162,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "107": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6817,
+                            "port_to": 6817,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Slurm Controller Daemon"
+                        },
+                        "108": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6819,
+                            "port_to": 6819,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Slurm Controller Daemon"
+                        },
+                        "109": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 7031,
+                            "port_to": 7031,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Slurm Controller Daemon"
+                        },
+                        "110": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 8443,
+                            "port_to": 8443,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Slurm Controller Daemon"
+                        },
+                        "111": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6818,
+                            "port_to": 6818,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Slurm Daemon slurmd"
+                        },
+                        "112": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 32768,
+                            "port_to": 65535,
+                            "cidrs": [
+                                "10.154.120.0/23"
+                            ],
+                            "description": "Srun Higher Ports"
+                        },
+                        "113": {
+                            "ethertype": "IPv4",
+                            "protocol": "",
+                            "port_from": 0,
+                            "port_to": 0,
+                            "cidrs": [
+                                "10.154.180.0/23",
+                                "10.107.168.0/23",
+                                "10.154.110.0/23"
+                            ],
+                            "description": "CC & AWS Chamber Any Connectivity"
+                        },
+                        "114": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 7800,
+                            "port_to": 7800,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "License Server"
+                        },
+                        "115": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 8649,
+                            "port_to": 8649,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "Ganglia gmetad process that runs at AWS UT01 machine"
+                        },
+                        "116": {
+                            "ethertype": "IPv4",
+                            "protocol": "icmp",
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "AWS FSxN Port"
+                        },
+                        "117": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 67,
+                            "port_to": 67,
+                            "cidrs": [
+                                "0.0.0.0/0"
+                            ],
+                            "description": "DHCP Agent Broadcast"
+                        },
+                        "119": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 53,
+                            "port_to": 53,
+                            "cidrs": [
+                                "10.202.56.11/32",
+                                "10.202.56.12/32"
+                            ],
+                            "description": "DNS Servers"
+                        },
+                        "120": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 53,
+                            "port_to": 53,
+                            "cidrs": [
+                                "10.202.56.11/32",
+                                "10.202.56.12/32"
+                            ],
+                            "description": "DNS Servers"
+                        },
+                        "121": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 8649,
+                            "port_to": 8649,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "Ganglia gmetad process that runs at AWS UT01 machine"
+                        },
+                        "122": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6818,
+                            "port_to": 6818,
+                            "cidrs": [
+                                "10.154.110.0/23"
+                            ],
+                            "description": "SRUN Access to AWS Chamber"
+                        },
+                        "130": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 111,
+                            "port_to": 111,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access portmapper"
+                        },
+                        "131": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 2049,
+                            "port_to": 2049,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access nfsd"
+                        },
+                        "132": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 635,
+                            "port_to": 635,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access mountd"
+                        },
+                        "133": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 4045,
+                            "port_to": 4045,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access nlockmgr"
+                        },
+                        "134": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 4046,
+                            "port_to": 4046,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access status"
+                        },
+                        "135": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 111,
+                            "port_to": 111,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access portmapper"
+                        },
+                        "136": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 2049,
+                            "port_to": 2049,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access nfsd"
+                        },
+                        "137": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 635,
+                            "port_to": 635,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access mountd"
+                        },
+                        "138": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 4045,
+                            "port_to": 4045,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access nlockmgr"
+                        },
+                        "139": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 4046,
+                            "port_to": 4046,
+                            "cidrs": [
+                                "10.107.183.251/32"
+                            ],
+                            "description": "Admin Chamber NFS Access status"
+                        },
+                        "140": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 111,
+                            "port_to": 111,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access portmapper"
+                        },
+                        "141": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 2049,
+                            "port_to": 2049,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access nfsd"
+                        },
+                        "142": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 635,
+                            "port_to": 635,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access mountd"
+                        },
+                        "143": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 4045,
+                            "port_to": 4045,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access nlockmgr"
+                        },
+                        "144": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 4046,
+                            "port_to": 4046,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access status"
+                        },
+                        "145": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 111,
+                            "port_to": 111,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access portmapper"
+                        },
+                        "146": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 2049,
+                            "port_to": 2049,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access nfsd"
+                        },
+                        "147": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 635,
+                            "port_to": 635,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access mountd"
+                        },
+                        "148": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 4045,
+                            "port_to": 4045,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access nlockmgr"
+                        },
+                        "149": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 4046,
+                            "port_to": 4046,
+                            "cidrs": [
+                                "10.107.169.251/32"
+                            ],
+                            "description": "Chamber NFS Access status"
+                        },
+                        "150": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 5280,
+                            "port_to": 5281,
+                            "cidrs": [
+                                "10.154.168.96/27"
+                            ],
+                            "description": "Cadece License Server Server Ports"
+                        },
+                        "151": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 6280,
+                            "port_to": 6280,
+                            "cidrs": [
+                                "10.154.168.96/27"
+                            ],
+                            "description": "Cadece License Server CLA App Access"
+                        }
+                    }
+                }
+            },
+            "CLA-SG": {
+                "name": "CLA-SG",
+                "description": "Cadence License Agent Security Group",
+                "sg_rules": {
+                    "ingress": {
+                        "100": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 389,
+                            "port_to": 389,
+                            "cidrs": [
+                                "10.154.180.0/24",
+                                "10.154.181.0/25",
+                                "10.154.181.128/28",
+                                "10.154.96.0/27"
+                            ],
+                            "description": "Compute and Storage Subnet LDAP Access"
+                        },
+                        "101": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 636,
+                            "port_to": 636,
+                            "cidrs": [
+                                "10.154.180.0/24",
+                                "10.154.181.0/25",
+                                "10.154.181.128/28",
+                                "10.154.96.0/27"
+                            ],
+                            "description": "Compute and Storage Subnet LDAPS Access"
+                        }
+                    },
+                    "egress": {}
+                }
+            },
+            "Platform-SG": {
+                "name": "Platform-SG",
+                "description": "CC Platfom Security Group",
+                "sg_rules": {
+                    "ingress": {
+                        "100": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 22,
+                            "port_to": 22,
+                            "cidrs": [
+                                "10.107.183.0/24"
+                            ],
+                            "description": "SSH Access From CC Admin Chamber"
+                        }
+                    },
+                    "egress": {
+                        "100": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 443,
+                            "port_to": 443,
+                            "cidrs": [
+                                "52.22.171.71/32",
+                                "3.233.67.0/32",
+                                "54.236.143.198/32",
+                                "162.159.140.26/32",
+                                "172.66.0.26/32"
+                            ],
+                            "description": "SentinelOne Nessus Access"
+                        },
+                        "101": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 10000,
+                            "port_to": 20000,
+                            "cidrs": [
+                                "10.107.178.0/24"
+                            ],
+                            "description": "OpenStack Chamber"
+                        },
+                        "102": {
+                            "ethertype": "IPv4",
+                            "protocol": "udp",
+                            "port_from": 123,
+                            "port_to": 123,
+                            "cidrs": [
+                                "0.0.0.0/0"
+                            ],
+                            "description": "NTP Server Access"
+                        },
+                        "103": {
+                            "ethertype": "IPv4",
+                            "protocol": "tcp",
+                            "port_from": 80,
+                            "port_to": 80,
+                            "cidrs": [
+                                "169.254.169.254/32"
+                            ],
+                            "description": "MetaData Service"
+                        }
+                    }
+                }
+            }
+        },
+        "customer_eni_mapping": {
+            "cla-eni": {
+                "name": "cla-eni",
+                "subnet": "ComputeSubnet2a",
+                "security_groups": [
+                    "Chm-AccessFromUtlSvr",
+                    "PrivateSG",
+                    "CLA-SG",
+                    "Platform-SG"
+                ],
+                "ip": {
+                    "private_ip": "10.154.180.51",
+                    "public_ip": "10.107.168.51",
+                    "hostnum": 51
+                }
+            },
+            "haproxy-eni": {
+                "name": "haproxy-eni",
+                "subnet": "ComputeSubnet2a",
+                "security_groups": [
+                    "Chm-AccessFromUtlSvr",
+                    "PrivateSG",
+                    "Platform-SG"
+                ],
+                "ip": {
+                    "private_ip": "10.154.180.52",
+                    "public_ip": "10.107.168.52",
+                    "hostnum": 52
+                }
+            }
+        },
+        "customer_rtb_mapping": {
+            "RtbInternal": {
+                "rtb_name": "RtbInternal",
+                "description": "Default Router",
+                "properties": [],
+                "subnets": [
+                    "StorageSubnet",
+                    "ComputeSubnet2a",
+                    "ComputeSubnet2b",
+                    "ComputeSubnet2c"
+                ],
+                "enabled": "true"
+            }
+        }
+    }
+}
