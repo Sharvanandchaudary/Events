@@ -1,0 +1,664 @@
+module "aws_utils" {
+  source = "git::https://github.cadence.com/IT/terraform-aws-utils.git?ref=1.3.4"
+}
+
+module "deepmerge_tags" {
+  source = "git::https://github.cadence.com/IT/terraform-null-deepmerge.git?ref=v0.1.5"
+
+  maps = [
+    var.tags_common,
+    var.tags_env
+  ]
+}
+
+module "deepmerge_storage" {
+  source = "git::https://github.cadence.com/IT/terraform-null-deepmerge.git?ref=v0.1.5"
+
+  maps = [
+    var.storage_common,
+    var.storage
+  ]
+}
+
+module "deepmerge_compute" {
+  source = "git::https://github.cadence.com/IT/terraform-null-deepmerge.git?ref=v0.1.5"
+
+  maps = [
+    var.compute_common,
+    var.compute
+  ]
+}
+
+module "deepmerge_networking" {
+  source = "git::https://github.cadence.com/IT/terraform-null-deepmerge.git?ref=v0.1.5"
+
+  maps = [
+    var.networking_common,
+    var.networking
+  ]
+}
+
+module "deepmerge_settings" {
+  source = "git::https://github.cadence.com/IT/terraform-null-deepmerge.git?ref=v0.1.5"
+
+  maps = [
+    var.settings_common,
+    var.settings
+  ]
+}
+
+module "deepmerge_security" {
+  source = "git::https://github.cadence.com/IT/terraform-null-deepmerge.git?ref=v0.1.5"
+
+  maps = [
+    var.security_common,
+    var.security
+  ]
+}
+
+data "terraform_remote_state" "aws_chamber" {
+  count   = local.settingsObj.hybrid_deployment ? 1 : 0
+  backend = "s3"
+  config = {
+    bucket = local.settingsObj.aws_chambers_bucket_name
+    key    = local.settingsObj.aws_chamber_tfstate_key
+    region = var.region
+
+    dynamodb_table = "cloud30-terraform-locks"
+  }
+}
+
+data "terraform_remote_state" "cc_admin_chamber" {
+  backend = "s3"
+  config = {
+    bucket = local.settingsObj.cc_hub_bucket_name
+    key    = local.settingsObj.cc_hub_tfstate_key
+    region = var.region
+
+    dynamodb_table = "cloud30-terraform-locks"
+  }
+}
+
+data "aws_secretsmanager_secret" "mirror_secrets" {
+  arn = local.settingsObj.s3_mirror_bucket_access_secrets_arn
+}
+
+data "aws_secretsmanager_secret_version" "aws_current" {
+  secret_id = data.aws_secretsmanager_secret.mirror_secrets.id
+}
+
+
+locals {
+  shorten_regions   = true
+  naming_convention = local.shorten_regions ? "to_short" : "identity"
+  az_map            = module.aws_utils.region_az_alt_code_maps[local.naming_convention]
+  environment       = split("-",var.environment)[0]
+  regionNo          = try(split("-",var.environment)[1], null)
+  name_lookup_iden  = local.regionNo != null ? format("%s-%s-%s",local.environment, var.openstack_region, local.regionNo) : format("%s-%s",local.environment, var.openstack_region)
+  short_region      = local.az_map[local.name_lookup_iden]
+  cloud30_prefix    = "c30-${local.short_region}-${local.environment}-${substr(var.name_prefix, 0, 2)}-${substr(var.name_prefix, 2, 2)}"
+  legacyPrefix      = "${local.short_region}${substr(var.name_prefix, 2, 2)}"
+
+  aws_vpc_cidr      = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.vpc_cidr : "0.0.0.0/0"
+  settingsObj   = module.deepmerge_settings.merged
+  computeObj    = module.deepmerge_compute.merged
+  networkingObj = module.deepmerge_networking.merged
+  storageObj    = module.deepmerge_storage.merged
+  securityObj   = module.deepmerge_security.merged
+  tagsObj       = module.deepmerge_tags.merged
+
+  tags = [ for key,value in local.tagsObj : "${key}:${value}"]
+
+  all_node_details = [
+    for k,v in module.deepmerge_compute.merged.compute_details.node_details : v
+  ]
+
+  node_details = [
+    for k,v in module.deepmerge_compute.merged.compute_details.node_details : v if (v.instance_type != "baremetal")
+  ]
+
+  baremetal_node_details = [
+    for k,v in module.deepmerge_compute.merged.compute_details.node_details : v if (v.instance_type == "baremetal")
+  ]
+
+  subnet_networks = [for k,subnet in local.networkingObj.customer_vpc_subnets : {
+    name       = subnet.name
+    new_bits   = subnet.new_bits
+  }]
+
+  customer_vpc_subnets =  [for key,subnet in local.networkingObj.customer_vpc_subnets: {
+    name       = subnet.name
+    cidr       = lookup(module.subnet_addrs.network_cidr_blocks,subnet.name)
+  } if(subnet.name != null)]
+
+  subnet_name_id_map = {for subnet in local.customer_vpc_subnets: subnet.name=>module.network.subnets_raw[subnet.name]["id"]}
+
+  eni_subnet_mapping =  {for key,eni_info in local.networkingObj.customer_eni_mapping : key => {
+    name            = eni_info.name
+    subnet          = eni_info.subnet
+    ip              = {
+      "private_ip"  = cidrhost(templatestring(eni_info.ip.private_ip,local.security_group_map),eni_info.ip.hostnum)
+      "public_ip"   =  try(cidrhost(templatestring(eni_info.ip.public_ip,local.security_group_map), eni_info.ip.hostnum),eni_info.ip.public_ip)
+      "hostnum"     = eni_info.ip.hostnum
+    }
+
+  }}
+
+  vpc_sg =  {for key,sg_info in local.networkingObj.customer_vpc_sg :  key => {
+    name            = sg_info.name
+    description     = sg_info.description
+    sg_rules        = {
+      ingress = [for ruleNo, obj in sg_info.sg_rules.ingress : {
+        id             = ruleNo
+        protocol       = lookup(obj,"protocol", null)
+        from_port      = lookup(obj,"port_from",null)
+        to_port        = lookup(obj,"port_to",null)
+        ethertype      = obj.ethertype
+        cidrs          = lookup(obj,"cidrs",null)
+      }]
+      egress = [for ruleNo, obj in sg_info.sg_rules.egress : {
+        id              = ruleNo
+        protocol        = lookup(obj,"protocol", null)
+        from_port       = lookup(obj,"port_from",null)
+        to_port         = lookup(obj,"port_to",null)
+        ethertype       = obj.ethertype
+        cidrs           = lookup(obj,"cidrs",null)
+      }]
+    }
+  }}
+
+#  tmp_eni_sg_mapping = {
+#    for key1, eni_info in local.networkingObj.customer_eni_mapping : key1 => {
+#      value = flatten([
+#        for key1, eni_info in local.networkingObj.customer_eni_mapping :[
+#          for idx2, sg in eni_info.security_groups : {
+#            (sg) = local.vpc_sg[sg]
+#          }
+#        ]
+#      ])
+#    }
+#  }
+#
+#  eni_sg_mapping = { for eni_name, eni_info in local.tmp_eni_sg_mapping : eni_name => merge(eni_info.value...) }
+
+
+  sg_name_list = {
+    for idx, sg in module.security-groups : sg.security_group_name => {
+      id = sg.security_group_id
+    }
+  }
+
+  tmp_eni_port_sg_mapping = {
+    for key1, eni_info in local.networkingObj.customer_eni_mapping : key1 => {
+      value = flatten([
+        for key1, eni_info in local.networkingObj.customer_eni_mapping :[
+          for idx2, sg in eni_info.security_groups : {
+            (sg) = local.sg_name_list[sg]
+          }
+        ]
+      ])
+    }
+  }
+
+  eni_port_sg_mapping = { for eni_name, eni_info in local.tmp_eni_port_sg_mapping : eni_name => merge(eni_info.value...) }
+
+
+  router_provider_ip = {
+    subnet_id = module.provider-network.subnets[module.provider-network.subnet_names[0]].id
+    ip_address = cidrhost(local.networkingObj.provider_cidr, 1)
+  }
+
+  customer_rtb_mapping_format = {for key,rtb in local.networkingObj.customer_rtb_mapping:
+    key=>{
+      rtb_name            = rtb.rtb_name
+      properties          = rtb.properties
+      description         = rtb.description
+      enabled             = rtb.enabled
+      external_network_id = module.provider-network.network_id
+      subnets_id          = [for sub in rtb.subnets: module.network.subnets_data[sub].id]
+      external_fixed_ip   = lookup(rtb,"external_fixed_ip",null) != null ? rtb.external_fixed_ip : local.router_provider_ip
+      network_id          = module.network.network_id
+      }
+  }
+
+  provider_subnets = [
+    {
+      cidr = local.networkingObj.provider_cidr
+      name = format("%s-%s", "subnet",local.networkingObj.provider_vlan)
+      allocation_pool = {
+        start = cidrhost(local.networkingObj.provider_cidr,2 )
+        end   = cidrhost(local.networkingObj.provider_cidr,-24)
+      }
+
+    }
+  ]
+
+  provider_segment = {
+    physical_network = "datacentre"
+    network_type     = "vlan"
+    segmentation_id  = local.networkingObj.provider_vlan
+  }
+
+  vm_objects = { for node in local.node_details : node.name => {
+    vm_name    = local.legacyPrefix == null ? format("%s-%s-%s",local.cloud30_prefix,node.name,"vm") : format("%s%s",local.legacyPrefix,node.name)
+    private_ip = local.eni_subnet_mapping[node.eni_name].ip.private_ip != null ? local.eni_subnet_mapping[node.eni_name].ip.private_ip : null
+    public_ip  = openstack_networking_floatingip_v2.fips[node.eni_name].address
+  } }
+
+  eni_node_mapping = { for node in local.all_node_details : node.eni_name => node }
+
+  flexcache_volumes = {for key,volume in local.storageObj.flexcache_volumes : key => volume if can(volume.peer_volume_name) }
+  local_volumes = {for key,volume in local.storageObj.flexcache_volumes : key => volume if !can(volume.peer_volume_name) }
+  fsxn_cache_volumes = {for key,volume in local.storageObj.netapp_volume.fsx_volume : key => volume if can(volume.peer_volume_name) }
+  fsxn_local_volumes = {for key,volume in local.storageObj.netapp_volume.fsx_volume : key => volume if !can(volume.peer_volume_name) }
+
+  chef_settings = {
+    env_prefix         = substr(var.name_prefix, 0, 2)
+    env_id             = substr(var.name_prefix, 2, 2)
+    name_prefix        = var.name_prefix
+    opendj_passwd_salt = var.opendj_credentials.password
+    keystore_password  = var.chef_secrets.keystore_password
+    chamber_number     = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.chamber_details.number : "-1"
+    ls01_privateIp     = local.eni_subnet_mapping["cla-eni"].ip.private_ip
+    hub_st01_publicIp = data.terraform_remote_state.cc_admin_chamber.outputs.st_public_ip
+    awsls01_privateIp  = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.license_server : "N/A"
+    awsut01_privateIp  = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.utility_server_ip : "N/A"
+    awsut01_name       = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.utility_server_node_name : "N/A"
+    as_server          = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.as_server_ip : "N/A"
+    as_server_hostname = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.as_server_hostname : "N/A"  
+    share_fsxn_name    = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.share_fsxn_name : "N/A"   
+    chamberfs_ip       = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.fsxn_details.management_address[0] : "N/A"
+    cdls_details       = {
+      cc_cdls_mstr       = data.terraform_remote_state.cc_admin_chamber.outputs.cdns_license_server.cdls-mstr.public_ip
+      cc_cdls_stndby     = data.terraform_remote_state.cc_admin_chamber.outputs.cdns_license_server.cdls-stndby.public_ip
+      cc_cdls_arbitr     = data.terraform_remote_state.cc_admin_chamber.outputs.cdns_license_server.cdls-arbitr.public_ip
+    }
+    aws_hub_name       = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.aws_hub_name : ""
+    cc_chamberfs_ip    = cidrhost(local.networkingObj.provider_cidr, -5)
+    sharedfs_ip        = data.terraform_remote_state.cc_admin_chamber.outputs.nfs_ip
+    recipe_tar         = local.computeObj.compute_details.userdata_details.recipe_tar
+    mirror             = local.computeObj.compute_details.userdata_details.mirror
+    mirror_dir         = local.computeObj.compute_details.userdata_details.mirror_dir
+    nessus_one_key     = var.nessus_key
+    sentinel_one_key   = var.sentinel_one_key
+    env_relative_path  = var.env_dir
+    syslog_map         = local.networkingObj.syslog
+    compute_details    = local.vm_objects
+    chef_symmetric_key = var.chef_symmetric_key
+    openstack_creds    = {
+      username = var.swift_credentials.username
+      password = var.swift_credentials.password
+      auth_url = var.openstack_auth_url
+      prj_id   = var.openstack_project_id
+      prj_name = var.openstack_project_name
+      region   = var.openstack_region
+    }
+    s3_mirror_access_details = {
+      access_key  = jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.aws_current.secret_string))["aws_chef_access_key"]
+      secret_key  = jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.aws_current.secret_string))["aws_chef_secret_key"]
+      aws_region  = var.region
+    }
+    chamber_info = {
+      cc_vpc_id        = var.openstack_project_id
+      floating_ip_pool = module.provider-network.network_name
+      subnet_ids       = [
+        local.subnet_name_id_map["ComputeSubnet2a"],
+        local.subnet_name_id_map["ComputeSubnet2b"],
+        local.subnet_name_id_map["ComputeSubnet2c"]
+      ]
+      security_group_ids   = [
+        module.security-groups["PrivateSG"].security_group_id,
+        module.security-groups["Platform-SG"].security_group_id
+      ]
+      project_name         = local.computeObj.compute_details.userdata_details.project_name
+      sched_cluster_name   = local.computeObj.compute_details.userdata_details.sched_cluster_name
+      chamber_name         = var.name_prefix
+      s3_mirror            = local.settingsObj.cc_chamber_json_s3_location
+    }
+  }
+
+  netapp_volume = {
+    cluster_name                  = var.netapp_profile_name
+    cloud30_prefix                = local.cloud30_prefix
+    cooling_period                = local.storageObj.netapp_volume.cooling_period
+    enable_volume                 = local.storageObj.netapp_volume.enable_volume
+    export_policy_name            = local.storageObj.netapp_volume.export_policy_name
+    export_policy_client_cidr     = local.networkingObj.provider_cidr
+    export_policy_ro_rule         = local.storageObj.netapp_volume.export_policy_ro_rule
+    export_policy_rw_rule         = local.storageObj.netapp_volume.export_policy_rw_rule
+    tiering_policy_name           = local.storageObj.netapp_volume.tiering_policy_name
+    export_policy_group_id        = local.storageObj.netapp_volume.export_policy_group_id
+    export_policy_user_id         = local.storageObj.netapp_volume.export_policy_user_id
+    export_policy_unix_permission = local.storageObj.netapp_volume.export_policy_unix_permission
+    security_style                = local.storageObj.netapp_volume.security_style
+    aggr_name                     = local.storageObj.netapp_volume.aggr_name
+    percent_snapshot_space        = local.storageObj.netapp_volume.percent_snapshot_space
+    enforcement                   = local.storageObj.netapp_volume.enforcement
+    reporting                     = local.storageObj.netapp_volume.reporting
+    space_guarantee               = local.storageObj.netapp_volume.space_guarantee
+    snapshot_policy               = local.storageObj.netapp_volume.snapshot_policy
+    encryption                    = local.storageObj.netapp_volume.encryption
+    subtype                       = local.storageObj.netapp_volume.subtype
+    language                      = local.storageObj.netapp_volume.language
+    fsx_volume                    = local.fsxn_local_volumes
+    fsx_cache_volume              = local.fsxn_cache_volumes
+    local_volumes                 = local.local_volumes
+    nfs_ip                        = cidrhost(local.networkingObj.provider_cidr, -5)
+    nfs_netmask                   = split("/",local.networkingObj.provider_cidr)[1]
+    home_port                     = format("%s-%s","a0b",local.networkingObj.provider_vlan)
+    home_node_ic                  = local.storageObj.netapp_volume.home_node_ic
+    home_node_ic2                 = local.storageObj.netapp_volume.home_node_ic2
+  }
+
+  netapp_peer = {
+    cluster_name             = var.netapp_profile_name
+    peer_cluster_ipaddresses = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.fsxn_details.peer_ip_addresses : null
+    peer_cluster_name        = local.settingsObj.hybrid_deployment ? format("%s%s","FsxId",split("-",data.terraform_remote_state.aws_chamber[0].outputs.fsxn_details.id)[1]) : null
+    generate_passphrase      = local.storageObj.netapp_peer_volume.generate_passphrase
+    peer_application_name    = local.storageObj.netapp_peer_volume.peer_application_name
+    cloud30_prefix           = local.cloud30_prefix
+    name_prefix              = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.chamber_details.name : "null"
+    home_port                = format("%s-%s","a0b",local.networkingObj.provider_vlan)
+    home_node_ic             = local.storageObj.netapp_peer_volume.home_node_ic
+    home_node_ic2            = local.storageObj.netapp_peer_volume.home_node_ic2
+    route_address            = split("/",local.aws_vpc_cidr)[0]
+    route_netmask            = split("/",local.aws_vpc_cidr)[1]
+    route_gateway            = cidrhost(local.networkingObj.provider_cidr, -2)
+    route_metric             = local.storageObj.route_metric
+    cluster_node_name        = local.storageObj.netapp_peer_volume.cluster_vserver
+    intercluster_lifs        = [ cidrhost(local.storageObj.netapp_peer_volume.netapp_cluster_int_cidr,13),
+                                cidrhost(local.storageObj.netapp_peer_volume.netapp_cluster_int_cidr,14)
+      ]
+    "local_env_details" : {
+      "python_version" : local.settingsObj.local_env_details.python_version
+    }
+  }
+  shared_fsxn_svm = {
+    export_policy_name = local.storageObj.shared_fsxn_svm.export_policy_name
+    export_policy_ro_rule = local.storageObj.shared_fsxn_svm.export_policy_ro_rule
+    export_policy_rw_rule = local.storageObj.shared_fsxn_svm.export_policy_rw_rule
+    export_policy_user_id = local.storageObj.shared_fsxn_svm.export_policy_user_id
+    prefix = "c30-${local.short_region}-${local.environment}-${substr(var.name_prefix, 0, 2)}-00"
+  }
+  security_group_map ={
+    drm_cidr = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.drm_cidr : local.settingsObj.drm_cidr
+    aws_admin_cidr = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.aws_admin_cidr : local.settingsObj.aws_admin_cidr
+    aws_chamber_cidr = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.aws_chamber_cidr : local.settingsObj.aws_chamber_cidr
+    syslog_server_ip = local.networkingObj.syslog.server_ip
+    dns_server_1 = local.networkingObj.dns_nameserver[0]
+    dns_server_2 = local.networkingObj.dns_nameserver[1]
+    sentinel_one_server_1 = local.settingsObj.sentinel_one_server_1
+    sentinel_one_server_2 = local.settingsObj.sentinel_one_server_2
+    sentinel_one_server_3 = local.settingsObj.sentinel_one_server_3
+    nessus_server_1 = local.settingsObj.nessus_server_1
+    nessus_server_2 = local.settingsObj.nessus_server_2
+    openstack_mgmt_ip = local.settingsObj.openstack_mgmt_ip
+    cc_admin_cidr = data.terraform_remote_state.cc_admin_chamber.outputs.provider_cidr_block
+    cc_chamber_cidr = local.networkingObj.provider_cidr
+    cc_chamber_internal_cidr = local.networkingObj.customer_vpc.cidr_block
+    cc_admin_nfs = data.terraform_remote_state.cc_admin_chamber.outputs.nfs_ip
+    cc_chamber_nfs_ip = cidrhost(local.networkingObj.provider_cidr, -5)
+    cc_license_cidr =  data.terraform_remote_state.cc_admin_chamber.outputs.subnet_maps["ls-cdns"].cidr
+  }
+
+  template_sg_map = {
+    "$${drm_cidr}" =  local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.drm_cidr : local.settingsObj.drm_cidr
+    "$${aws_admin_cidr}" = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.aws_admin_cidr : local.settingsObj.aws_admin_cidr
+    "$${aws_chamber_cidr}" = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.aws_chamber_cidr : local.settingsObj.aws_chamber_cidr
+    "$${syslog_server_ip}/32" = format("%s/%s",local.networkingObj.syslog.server_ip,32)
+    "$${dns_server_1}/32" = format("%s/%s",local.networkingObj.dns_nameserver[0],32)
+    "$${dns_server_2}/32" = format("%s/%s",local.networkingObj.dns_nameserver[1],32)
+    "$${sentinel_one_server_1}" = local.settingsObj.sentinel_one_server_1
+    "$${sentinel_one_server_2}" = local.settingsObj.sentinel_one_server_2
+    "$${sentinel_one_server_3}" = local.settingsObj.sentinel_one_server_3
+    "$${nessus_server_1}" = local.settingsObj.nessus_server_1
+    "$${nessus_server_2}" = local.settingsObj.nessus_server_2
+    "$${openstack_mgmt_ip}" = local.settingsObj.openstack_mgmt_ip
+    "$${cc_admin_cidr}" = data.terraform_remote_state.cc_admin_chamber.outputs.provider_cidr_block
+    "$${cc_chamber_cidr}" = local.networkingObj.provider_cidr
+    "$${cc_chamber_internal_cidr}" = local.networkingObj.customer_vpc.cidr_block
+    "$${cc_admin_nfs}/32" = format("%s/%s",data.terraform_remote_state.cc_admin_chamber.outputs.nfs_ip,32)
+    "$${cc_chamber_nfs_ip}/32" = format("%s/%s",cidrhost(local.networkingObj.provider_cidr, -5),32)
+    "$${cc_license_cidr}" =  data.terraform_remote_state.cc_admin_chamber.outputs.subnet_maps["ls-cdns"].cidr
+  }
+}
+
+#Calculate subnets
+module "subnet_addrs" {
+  source   = "hashicorp/subnets/cidr"
+  version  = "1.0.0"
+  base_cidr_block = local.networkingObj.customer_vpc.cidr_block
+  networks = local.subnet_networks
+}
+
+#Create Provider
+module "provider-network" {
+  source = "git::https://github.cadence.com/IT/terraform-openstack-network.git?ref=v1.2.0"
+  prefix           = "pro"
+  network_suffix   = format("%s%s","net-vlan",local.networkingObj.provider_vlan)
+  network_shared   = try(local.networkingObj.shared,false)
+  network_external = true
+  subnet_kv_list   = local.provider_subnets
+  region           = var.openstack_region
+  dns_nameservers  = local.networkingObj.dns_nameserver
+  segment          = local.provider_segment
+  tags             = local.tags
+}
+
+#Create network and subnets
+module "network" {
+  source = "git::https://github.cadence.com/IT/terraform-openstack-network.git?ref=v1.2.0"
+  prefix          = local.cloud30_prefix
+  network_shared  = try(local.networkingObj.shared,false)
+  subnet_kv_list  = local.customer_vpc_subnets
+  region          = var.openstack_region
+  dns_nameservers = local.networkingObj.dns_nameserver
+  tags            = local.tags
+}
+
+#Create Routers
+module "router" {
+  source  = "git::https://github.cadence.com/IT/terraform-openstack-router?ref=v1.2.0"
+  prefix      = local.cloud30_prefix
+  region      = var.openstack_region
+  tags        = local.tags
+  rtb_mapping = local.customer_rtb_mapping_format
+}
+
+resource "openstack_networking_floatingip_v2" "fips" {
+  for_each  = { for eni in local.eni_subnet_mapping : eni.name => eni if(local.eni_node_mapping[eni.name].instance_type != "baremetal") }
+
+  pool     =  module.provider-network.network_name
+  subnet_id = module.provider-network.subnets_data[local.provider_subnets[0].name].id
+  address  = each.value.ip.public_ip != null ?  each.value.ip.public_ip : null
+}
+
+#Create Security Groups
+module "security-groups" {
+  for_each         = {for sg in local.vpc_sg : sg.name => sg }
+  source           = "git::https://github.cadence.com/IT/terraform-openstack-sg.git?ref=v1.2.2"
+  prefix           = local.cloud30_prefix
+  tags             = local.tags
+  region           = var.openstack_region
+  customer_vpc_sg  = each.value
+  rule_map_values  = local.template_sg_map
+}
+
+#Create nodes
+module "vm" {
+  for_each = {for node in local.node_details : node.name => node}
+  source   = "git::https://github.cadence.com/IT/terraform-openstack-vm.git?ref=v1.2.4"
+
+  prefix        = local.cloud30_prefix
+  instance_name = each.value.name
+  legacyPrefix  = local.legacyPrefix
+  image_id      = each.value.image
+  volume_size   = each.value.volume_size != null ? each.value.volume_size : null
+  volume_type   = local.storageObj.volume_type
+  region        = var.openstack_region
+  flavor_name   = each.value.instance_type
+  floating_ip   = openstack_networking_floatingip_v2.fips[each.value.eni_name].address
+
+  public_ssh_key     = local.securityObj.vm_ssh_pub_key
+  security_group_map = {}
+  additional_disks   = null != each.value.additional_volumes ? lookup(local.storageObj.ebs_volume_details, each.value.additional_volumes, {}) : {}
+  port               = {
+    network_id         = module.network.network_id
+    subnet_id          = module.network.subnets_data[local.eni_subnet_mapping[each.value.eni_name].subnet].id
+    fixed_ip           = local.eni_subnet_mapping[each.value.eni_name].ip.private_ip != null ? local.eni_subnet_mapping[each.value.eni_name].ip.private_ip : null
+    pool               = "false"
+    security_group_ids = [for sg in local.eni_port_sg_mapping[each.value.eni_name] : sg.id]
+  }
+  tags = local.tags
+
+  user_data = base64encode(templatefile("user_data_copy.tftpl", {
+    node_name               = local.legacyPrefix == null ? format("%s-%s-%s", local.cloud30_prefix, each.value.name, "vm") : format("%s%s", local.legacyPrefix, each.value.name)
+    recipe_tar              = local.computeObj.compute_details.userdata_details.recipe_tar
+    orchestrator_home       = local.computeObj.compute_details.userdata_details.orchestrator_home,
+    env_relative_path       = var.env_dir
+    region                  = var.region,
+    mirror                  = local.computeObj.compute_details.userdata_details.mirror,
+    mirror_dir              = local.computeObj.compute_details.userdata_details.mirror_dir,
+    orchestrator_chef_dir   = local.computeObj.compute_details.userdata_details.chef_dir,
+    chef_solo_embedded_path = local.computeObj.compute_details.userdata_details.chef_solo_embedded_path,
+    orchestrator_log_path   = local.computeObj.compute_details.userdata_details.chef_log_path
+    chef_solo_path          = local.computeObj.compute_details.userdata_details.chef_solo_path
+    openstack_user          = var.swift_credentials.username
+    openstack_pass          = var.swift_credentials.password
+    openstack_auth_url      = var.openstack_auth_url
+    openstack_prj_id        = var.openstack_project_id
+    openstack_prj_name      = var.openstack_project_name
+    openstack_region        = var.openstack_region
+    openstack_user_domain   = var.openstack_user_domain_name
+    openstack_prj_domain    = var.openstack_project_domain_name
+    openstack_auth_version  = var.openstack_auth_version
+  }))
+
+}
+
+module "baremetal-vm" {
+  for_each = {for node in local.baremetal_node_details : node.name => node}
+  source   = "git::https://github.cadence.com/IT/terraform-openstack-vm.git?ref=v1.2.3"
+
+  prefix        = local.cloud30_prefix
+  instance_name = each.value.name
+  legacyPrefix  = local.legacyPrefix
+  image_id      = each.value.image
+  volume_size   = each.value.volume_size != null ? each.value.volume_size : null
+  region        = var.openstack_region
+  flavor_name   = each.value.instance_type
+  floating_ip   = null
+
+  public_ssh_key     = local.securityObj.vm_ssh_pub_key
+  security_group_map = {}
+  additional_disks   = null != each.value.additional_volumes ? lookup(local.storageObj.ebs_volume_details, each.value.additional_volumes, {}) : {}
+  port               = {
+    network_id         = module.provider-network.network_id
+    subnet_id          = module.provider-network.subnets_data[local.provider_subnets[0].name].id
+    fixed_ip           = local.eni_subnet_mapping[each.value.eni_name].ip.public_ip
+    pool               = "false"
+    security_group_ids = [for sg in local.eni_port_sg_mapping[each.value.eni_name] : sg.id]
+  }
+
+  baremetal_port       = {
+    network_id         = local.networkingObj.baremetal.network_id
+    subnet_id          = local.networkingObj.baremetal.subnet_id
+    fixed_ip           = null
+    pool               = "false"
+    security_group_ids = []
+  }
+  tags = local.tags
+
+  user_data = base64encode(templatefile("user_data_copy.tftpl", {
+    node_name               = local.legacyPrefix == null ? format("%s-%s-%s", local.cloud30_prefix, each.value.name, "vm") : format("%s%s", local.legacyPrefix, each.value.name)
+    recipe_tar              = local.computeObj.compute_details.userdata_details.recipe_tar
+    orchestrator_home       = local.computeObj.compute_details.userdata_details.orchestrator_home,
+    env_relative_path       = var.env_dir
+    region                  = var.region,
+    mirror                  = local.computeObj.compute_details.userdata_details.mirror,
+    mirror_dir              = local.computeObj.compute_details.userdata_details.mirror_dir,
+    orchestrator_chef_dir   = local.computeObj.compute_details.userdata_details.chef_dir,
+    chef_solo_embedded_path = local.computeObj.compute_details.userdata_details.chef_solo_embedded_path,
+    orchestrator_log_path   = local.computeObj.compute_details.userdata_details.chef_log_path
+    chef_solo_path          = local.computeObj.compute_details.userdata_details.chef_solo_path
+    openstack_user          = var.swift_credentials.username
+    openstack_pass          = var.swift_credentials.password
+    openstack_auth_url      = var.openstack_auth_url
+    openstack_prj_id        = var.openstack_project_id
+    openstack_prj_name      = var.openstack_project_name
+    openstack_region        = var.openstack_region
+    openstack_user_domain   = var.openstack_user_domain_name
+    openstack_prj_domain    = var.openstack_project_domain_name
+    openstack_auth_version  = var.openstack_auth_version
+  }))
+
+  depends_on = [ null_resource.config_chef ]
+}
+
+
+resource "null_resource" "config_chef" {
+
+  triggers = {
+    always_run = timestamp()
+  }
+  provisioner "local-exec" {
+    command     = <<-EOT
+      ${local.settingsObj.local_env_details.python_version} main.py ${base64encode(templatefile("${path.module}/customer_base_config.tftpl", local.chef_settings))}
+    EOT
+    working_dir = "${path.module}/files/scripts/config_chef"
+  }
+}
+
+resource "null_resource" "haproxy_availability" {
+  count = local.settingsObj.hybrid_deployment ? 1 : 0
+  depends_on = [ null_resource.config_chef ]
+  provisioner "local-exec" {
+    when        = create
+    command = (
+      "chmod u+x check_haproxy_status.sh && ./check_haproxy_status.sh ${self.triggers.fsxn_hostname} ${self.triggers.FSXN_SVC_USERNAME} ${self.triggers.FSXN_SVC_PASSWORD}"
+    )
+    working_dir = "${path.module}/files/scripts/"
+  }
+
+  triggers = {
+    fsxn_hostname = local.networkingObj.customer_eni_mapping.haproxy-eni.ip.public_ip
+    FSXN_SVC_USERNAME            = var.fsxn_credentials.username
+    FSXN_SVC_PASSWORD            = var.fsxn_credentials.password
+  }
+}
+
+
+module "openstack-netapp-chamber" {
+  count = local.settingsObj.hybrid_deployment ? 1 : 0
+  source = "git::https://github.cadence.com/IT/terraform-netapp-chamber.git?ref=v1.1.4"
+
+  cluster_name                 = var.netapp_profile_name
+  peer_cx_profile_name         = var.fsxn_profile_name
+  volume_size_unit             = local.storageObj.volume_size_unit
+  guarantee_type               = local.storageObj.guarantee_type
+  global_lock_enabled          = local.storageObj.global_lock_enabled
+  netapp_peer                  = local.netapp_peer
+  netapp_volume                = local.netapp_volume
+  dr_cache                     = local.storageObj.dr_cache
+  is_flexcache_enabled         = local.storageObj.flex_cache_enabled
+  flexcache_volume             = local.flexcache_volumes
+  FSXN_SVC_NAME                = var.fsxn_credentials.profile_name
+  FSXN_SVC_HOSTNAME            = local.networkingObj.customer_eni_mapping.haproxy-eni.ip.public_ip
+  FSXN_SVC_USERNAME            = var.fsxn_credentials.username
+  FSXN_SVC_PASSWORD            = var.fsxn_credentials.password
+  NETAPP_SVC_NAME              = var.netapp_credentials.profile_name
+  NETAPP_SVC_HOSTNAME          = var.netapp_credentials.hostname
+  NETAPP_SVC_USERNAME          = var.netapp_credentials.username
+  NETAPP_SVC_PASSWORD          = var.netapp_credentials.password
+  route_address                = local.aws_vpc_cidr
+  route_metric                 = local.storageObj.route_metric
+  route_gateway                = cidrhost(local.networkingObj.provider_cidr, -2)
+  cloud30_prefix               = local.cloud30_prefix
+  name_prefix                  = local.netapp_peer.name_prefix
+  shared_fsxn_svm              = local.shared_fsxn_svm
+  aws_shared_admin_cidr        = local.settingsObj.hybrid_deployment ? data.terraform_remote_state.aws_chamber[0].outputs.share_admin_cidr : "N/A"
+
+  depends_on = [ module.vm, null_resource.haproxy_availability ]
+  
+}
+
