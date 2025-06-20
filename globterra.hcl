@@ -190,3 +190,7 @@ inputs = merge(
     fsxn_profile_name   = local.config_map.fsxn_credentials.profile_name
   }
 )
+
+
+  "source_url": "git::https://github.cadence.com/IT/terraform-openstack-chamber.git//modules/baremetal_only",
+  "release": "feature/baremetal-only",
