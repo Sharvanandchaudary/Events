@@ -38,3 +38,33 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+#!/bin/bash
+
+# Set hostname
+hostnamectl set-hostname ${hostname}
+
+# Create base config manually (if needed by any agent or logging)
+cat <<EOF > /etc/base-config.json
+{
+  "hostname": "${hostname}",
+  "environment": "test",
+  "chamber": "TN05",
+  "role": "baremetal-node"
+}
+EOF
+
+# Example: simulate Chef's folder creation
+mkdir -p /opt/nexem/config
+echo "Node initialized on $(date)" > /opt/nexem/config/status.txt
+
+# Start essential services (if image doesn’t already do this)
+systemctl restart NetworkManager
+
+# Optional: Touch log to show image boot
+echo "Provision complete - no Chef" >> /etc/motd
