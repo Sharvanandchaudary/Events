@@ -1,3 +1,5 @@
+# Declare input variables
+
 variable "compute" {
   description = "Compute config with node details"
   type = object({
@@ -9,12 +11,24 @@ variable "compute" {
         volume_size         = number
         additional_volumes  = any
         eni_name            = string
-        # Add other fields like `availability_zone`, `key_pair` if they exist
+        availability_zone   = optional(string)
       }))
     })
+    key_pair         = string
+    security_groups  = list(string)
   })
 }
 
+variable "customer_eni_mapping" {
+  description = "Map of ENI names to their network, subnet, and IP settings"
+  type = map(object({
+    network_id = string
+    subnet_id  = string
+    ip_address = string
+  }))
+}
+
+# Local block to filter out baremetal nodes
 locals {
   baremetal_nodes = [
     for node in var.compute.compute_details.node_details :
@@ -23,6 +37,7 @@ locals {
   ]
 }
 
+# Provision compute instances
 resource "openstack_compute_instance_v2" "baremetal_nodes" {
   for_each = { for node in local.baremetal_nodes : node.name => node }
 
@@ -41,15 +56,16 @@ resource "openstack_compute_instance_v2" "baremetal_nodes" {
   depends_on = [openstack_networking_port_v2.bm_ports]
 }
 
+# Create networking ports for each node
 resource "openstack_networking_port_v2" "bm_ports" {
   for_each = { for node in local.baremetal_nodes : node.name => node }
 
   name           = "${each.value.name}-port"
-  network_id     = var.compute.customer_eni_mapping[each.value.eni_name].network_id
+  network_id     = var.customer_eni_mapping[each.value.eni_name].network_id
   admin_state_up = true
 
   fixed_ip {
-    subnet_id = var.compute.customer_eni_mapping[each.value.eni_name].subnet_id
-    ip_address = var.compute.customer_eni_mapping[each.value.eni_name].ip_address
+    subnet_id  = var.customer_eni_mapping[each.value.eni_name].subnet_id
+    ip_address = var.customer_eni_mapping[each.value.eni_name].ip_address
   }
 }
