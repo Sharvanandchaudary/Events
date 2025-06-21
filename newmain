@@ -1,0 +1,55 @@
+variable "compute" {
+  description = "Compute config with node details"
+  type = object({
+    compute_details = object({
+      node_details = map(object({
+        name                = string
+        instance_type       = string
+        image               = string
+        volume_size         = number
+        additional_volumes  = any
+        eni_name            = string
+        # Add other fields like `availability_zone`, `key_pair` if they exist
+      }))
+    })
+  })
+}
+
+locals {
+  baremetal_nodes = [
+    for node in var.compute.compute_details.node_details :
+    node
+    if node.instance_type == "baremetal" && can(regex("wrk", node.name))
+  ]
+}
+
+resource "openstack_compute_instance_v2" "baremetal_nodes" {
+  for_each = { for node in local.baremetal_nodes : node.name => node }
+
+  name              = each.value.name
+  image_name        = each.value.image
+  flavor_name       = each.value.instance_type
+  key_pair          = var.compute.key_pair
+  availability_zone = each.value.availability_zone
+  security_groups   = var.compute.security_groups
+  user_data         = templatefile("${path.module}/templates/user_data.sh", {})
+
+  network {
+    port = openstack_networking_port_v2.bm_ports[each.value.name].id
+  }
+
+  depends_on = [openstack_networking_port_v2.bm_ports]
+}
+
+resource "openstack_networking_port_v2" "bm_ports" {
+  for_each = { for node in local.baremetal_nodes : node.name => node }
+
+  name           = "${each.value.name}-port"
+  network_id     = var.compute.customer_eni_mapping[each.value.eni_name].network_id
+  admin_state_up = true
+
+  fixed_ip {
+    subnet_id = var.compute.customer_eni_mapping[each.value.eni_name].subnet_id
+    ip_address = var.compute.customer_eni_mapping[each.value.eni_name].ip_address
+  }
+}
